@@ -1,0 +1,358 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            Int        @id @default(autoincrement())
+  name          String
+  email         String     @unique
+  passwordHash  String
+  role          UserRole   @default(CONSULTA)
+  active        Boolean    @default(true)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  createdPurchaseOrders PurchaseOrder[] @relation("PurchaseOrderCreatedBy")
+  receivedReceipts      Receipt[]       @relation("ReceiptReceivedBy")
+  createdAssignments    DeviceAssignment[] @relation("AssignmentCreatedBy")
+  deviceMovements       DeviceMovement[]
+  consumableMovements   ConsumableMovement[]
+  auditLogs             AuditLog[]
+}
+
+model Person {
+  id            Int        @id @default(autoincrement())
+  firstName     String
+  lastName      String
+  fullName      String
+  employeeId    String     @unique
+  email         String?
+  phone         String?
+  department    String?
+  active        Boolean    @default(true)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  assignments   DeviceAssignment[]
+  deviceMovements DeviceMovement[]
+  consumableAssignments ConsumableAssignment[]
+}
+
+model Supplier {
+  id            Int        @id @default(autoincrement())
+  name          String
+  taxId         String?
+  email         String?
+  phone         String?
+  notes         String?
+  active        Boolean    @default(true)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  purchaseOrders PurchaseOrder[]
+  devices        Device[]
+}
+
+model DeviceCategory {
+  id            Int        @id @default(autoincrement())
+  name          String     @unique
+  description   String?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  models        DeviceModel[]
+  devices       Device[]
+}
+
+model DeviceModel {
+  id            Int        @id @default(autoincrement())
+  categoryId    Int
+  brand         String
+  model         String
+  description   String?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  category      DeviceCategory   @relation(fields: [categoryId], references: [id])
+  devices       Device[]
+  purchaseOrderItems PurchaseOrderItem[]
+
+  @@unique([categoryId, brand, model])
+}
+
+model DeviceStatus {
+  id            Int        @id @default(autoincrement())
+  code          String     @unique
+  name          String
+  description   String?
+  sortOrder     Int
+
+  devices       Device[]
+}
+
+model PurchaseOrder {
+  id            Int        @id @default(autoincrement())
+  number        String     @unique
+  supplierId    Int
+  date          DateTime
+  status        PurchaseOrderStatus @default(PENDIENTE)
+  notes         String?
+  createdById   Int?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  supplier      Supplier   @relation(fields: [supplierId], references: [id])
+  createdBy     User?      @relation("PurchaseOrderCreatedBy", fields: [createdById], references: [id])
+  items         PurchaseOrderItem[]
+  receipts      Receipt[]
+  devices       Device[]
+  consumableMovements ConsumableMovement[]
+}
+
+model PurchaseOrderItem {
+  id                 Int        @id @default(autoincrement())
+  purchaseOrderId    Int
+  itemType           ItemType
+  deviceModelId      Int?
+  consumableId       Int?
+  quantity           Int
+  unitPrice          Decimal?   @db.Decimal(12, 2)
+  notes              String?
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+
+  purchaseOrder      PurchaseOrder @relation(fields: [purchaseOrderId], references: [id])
+  deviceModel        DeviceModel?  @relation(fields: [deviceModelId], references: [id])
+  consumable         Consumable?   @relation(fields: [consumableId], references: [id])
+  receiptItems       ReceiptItem[]
+
+  @@index([purchaseOrderId])
+}
+
+model Receipt {
+  id                 Int        @id @default(autoincrement())
+  purchaseOrderId    Int
+  receiptNumber      String?
+  receivedAt         DateTime
+  notes              String?
+  receivedById       Int?
+  createdAt          DateTime   @default(now())
+
+  purchaseOrder      PurchaseOrder @relation(fields: [purchaseOrderId], references: [id])
+  receivedBy         User?         @relation("ReceiptReceivedBy", fields: [receivedById], references: [id])
+  items              ReceiptItem[]
+  consumableMovements ConsumableMovement[]
+}
+
+model ReceiptItem {
+  id                 Int        @id @default(autoincrement())
+  receiptId          Int
+  purchaseOrderItemId Int
+  receivedQuantity   Int
+  createdAt          DateTime   @default(now())
+
+  receipt            Receipt           @relation(fields: [receiptId], references: [id])
+  purchaseOrderItem  PurchaseOrderItem @relation(fields: [purchaseOrderItemId], references: [id])
+
+  @@index([receiptId])
+  @@index([purchaseOrderItemId])
+}
+
+model Device {
+  id                 Int        @id @default(autoincrement())
+  tag                String     @unique
+  serialNumber       String     @unique
+  hostname           String? 
+  categoryId         Int
+  modelId            Int
+  statusId           Int
+  location           String?
+  supplierId         Int?
+  purchaseOrderId    Int?
+  purchaseDate       DateTime?
+  entryDate          DateTime
+  notes              String?
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+
+  category           DeviceCategory @relation(fields: [categoryId], references: [id])
+  model              DeviceModel    @relation(fields: [modelId], references: [id])
+  status             DeviceStatus   @relation(fields: [statusId], references: [id])
+  supplier           Supplier?      @relation(fields: [supplierId], references: [id])
+  purchaseOrder      PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id])
+
+  assignments        DeviceAssignment[]
+  movements          DeviceMovement[]
+
+  @@index([statusId])
+  @@index([modelId])
+  @@index([purchaseOrderId])
+}
+
+model DeviceAssignment {
+  id                 Int        @id @default(autoincrement())
+  deviceId           Int
+  personId           Int
+  assignedAt         DateTime
+  returnedAt         DateTime?
+  status             AssignmentStatus @default(ACTIVA)
+  notes              String?
+  createdById        Int?
+  createdAt          DateTime   @default(now())
+
+  device             Device     @relation(fields: [deviceId], references: [id])
+  person             Person     @relation(fields: [personId], references: [id])
+  createdBy          User?      @relation("AssignmentCreatedBy", fields: [createdById], references: [id])
+
+  @@index([deviceId])
+  @@index([personId])
+  @@index([status])
+}
+
+model DeviceMovement {
+  id                 Int        @id @default(autoincrement())
+  deviceId           Int
+  type               DeviceMovementType
+  previousStatus     String?
+  newStatus          String?
+  personId           Int?
+  detail             String?
+  userId             Int?
+  date               DateTime   @default(now())
+
+  device             Device     @relation(fields: [deviceId], references: [id])
+  person             Person?    @relation(fields: [personId], references: [id])
+  user               User?      @relation(fields: [userId], references: [id])
+
+  @@index([deviceId])
+  @@index([date])
+}
+
+model Consumable {
+  id                 Int        @id @default(autoincrement())
+  name               String
+  brand              String?
+  model              String
+  variant            String?
+  minimumStock       Int        @default(0)
+  unitMeasure        String?
+  active             Boolean    @default(true)
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+
+  stock              ConsumableStock?
+  movements          ConsumableMovement[]
+  purchaseOrderItems PurchaseOrderItem[]
+  assignments        ConsumableAssignment[]
+
+  @@unique([name, brand, model, variant])
+}
+
+model ConsumableStock {
+  id                 Int        @id @default(autoincrement())
+  consumableId       Int        @unique
+  currentStock       Int        @default(0)
+  updatedAt          DateTime   @updatedAt
+
+  consumable         Consumable @relation(fields: [consumableId], references: [id])
+}
+
+model ConsumableMovement {
+  id                 Int        @id @default(autoincrement())
+  consumableId       Int
+  purchaseOrderId    Int?
+  receiptId          Int?
+  type               ConsumableMovementType
+  quantity           Int
+  previousStock      Int
+  newStock           Int
+  detail             String?
+  userId             Int?
+  date               DateTime   @default(now())
+
+  consumable         Consumable    @relation(fields: [consumableId], references: [id])
+  purchaseOrder      PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id])
+  receipt            Receipt?       @relation(fields: [receiptId], references: [id])
+  user               User?          @relation(fields: [userId], references: [id])
+
+  @@index([consumableId])
+  @@index([date])
+}
+
+model ConsumableAssignment {
+  id                 Int        @id @default(autoincrement())
+  consumableId       Int
+  personId           Int
+  quantity           Int
+  assignedAt         DateTime
+  notes              String?
+  createdById        Int?
+  createdAt          DateTime   @default(now())
+
+  consumable         Consumable @relation(fields: [consumableId], references: [id])
+  person             Person     @relation(fields: [personId], references: [id])
+
+  @@index([consumableId])
+  @@index([personId])
+}
+
+model AuditLog {
+  id                 Int        @id @default(autoincrement())
+  entity             String
+  entityId           Int
+  action             String
+  previousValues     Json?
+  newValues          Json?
+  userId             Int?
+  date               DateTime   @default(now())
+
+  user               User?      @relation(fields: [userId], references: [id])
+
+  @@index([entity, entityId])
+  @@index([date])
+}
+
+enum UserRole {
+  EDICION
+  CONSULTA
+}
+
+enum PurchaseOrderStatus {
+  PENDIENTE
+  PARCIAL
+  COMPLETA
+  ANULADA
+}
+
+enum ItemType {
+  DEVICE
+  CONSUMABLE
+}
+
+enum AssignmentStatus {
+  ACTIVA
+  FINALIZADA
+}
+
+enum DeviceMovementType {
+  ALTA_MANUAL
+  INGRESO_POR_COMPRA
+  CAMBIO_ESTADO
+  ASIGNACION
+  DEVOLUCION
+  REPARACION
+  BAJA
+  ACTUALIZACION
+}
+
+enum ConsumableMovementType {
+  INGRESO_POR_COMPRA
+  SALIDA_POR_CONSUMO
+  AJUSTE_POSITIVO
+  AJUSTE_NEGATIVO
+}
