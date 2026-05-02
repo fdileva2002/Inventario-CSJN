@@ -4,6 +4,10 @@ import {
   Box,
   Button,
   Container,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
   Paper,
   TextField,
   Typography,
@@ -14,10 +18,11 @@ import { saveToken, saveUser } from '../auth/auth.storage';
 export default function LoginPage() {
   const navigate = useNavigate();
 
-  const [email, setEmail] = useState('admin@inventario.local');
-  const [password, setPassword] = useState('Admin1234!');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [openForgot, setOpenForgot] = useState(false);
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -38,13 +43,7 @@ export default function LoginPage() {
 
   return (
     <Container maxWidth="sm">
-      <Box
-        sx={{
-          minHeight: '100vh',
-          display: 'flex',
-          alignItems: 'center',
-        }}
-      >
+      <Box sx={{ minHeight: '100vh', display: 'flex', alignItems: 'center' }}>
         <Paper sx={{ p: 4, width: '100%' }}>
           <Typography variant="h4" sx={{ mb: 3 }}>
             Inventario Sistemas CSJN
@@ -83,9 +82,33 @@ export default function LoginPage() {
             >
               {loading ? 'Ingresando...' : 'Ingresar'}
             </Button>
+
+            <Button
+              fullWidth
+              sx={{ mt: 1 }}
+              onClick={() => setOpenForgot(true)}
+            >
+              Olvidé mi contraseña
+            </Button>
           </Box>
         </Paper>
       </Box>
+
+      <Dialog open={openForgot} onClose={() => setOpenForgot(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>Olvidé mi contraseña</DialogTitle>
+        <DialogContent>
+          <Typography sx={{ mb: 1 }}>
+            Este sistema no tiene recuperación automática de contraseña.
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Contactá al administrador del sistema para que blanquee tu contraseña
+            desde el panel de usuarios.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenForgot(false)}>Entendido</Button>
+        </DialogActions>
+      </Dialog>
     </Container>
   );
 }

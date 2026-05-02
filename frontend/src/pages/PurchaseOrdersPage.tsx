@@ -18,6 +18,7 @@ import {
 } from '@mui/material';
 import { api } from '../api/axios';
 import AppLayout from '../components/AppLayout';
+import { getUser } from '../auth/auth.storage';
 
 type PurchaseOrder = {
   id: number;
@@ -121,11 +122,26 @@ export default function PurchaseOrdersPage() {
   const [selectedReceipt, setSelectedReceipt] = useState<Receipt | null>(null);
   const [receiptDevices, setReceiptDevices] = useState<string[]>([]);
   const [devicesExcelFile, setDevicesExcelFile] = useState<File | null>(null);
+
+  const user = getUser();
+  const canEdit = user?.role === 'EDICION';
+  const [selectedItemCategoryId, setSelectedItemCategoryId] = useState('');
+
+  const filteredItemModels = selectedItemCategoryId
+    ? models.filter((m: any) => m.category?.id === Number(selectedItemCategoryId))
+    : models;
   
 
   async function loadOrders() {
     const response = await api.get('/purchase-orders');
     setOrders(response.data);
+  }
+
+  const [categories, setCategories] = useState<{id: number, name: string}[]>([]);
+
+  async function loadCategories() {
+    const response = await api.get('/device-categories');
+    setCategories(response.data);
   }
 
 
@@ -134,6 +150,7 @@ export default function PurchaseOrdersPage() {
     loadSuppliers();
     loadModels();
     loadConsumables();
+    loadCategories();
   }, []);
 
   async function handleCreateOrder() {
@@ -323,9 +340,11 @@ export default function PurchaseOrdersPage() {
         Órdenes de compra
       </Typography>
 
-      <Button variant="contained" sx={{ mb: 2 }} onClick={() => setOpenCreate(true)}>
-        Nueva orden
-      </Button>
+      {canEdit && (
+        <Button variant="contained" sx={{ mb: 2 }} onClick={() => setOpenCreate(true)}>
+          Nueva orden
+        </Button>
+      )}
 
       <Paper sx={{ p: 2 }}>
         <Table>
@@ -354,7 +373,7 @@ export default function PurchaseOrdersPage() {
         </Table>
       </Paper>
 
-      {/* MODAL CREAR */}
+      
       <Dialog open={openCreate} onClose={() => setOpenCreate(false)}>
         <DialogTitle>Nueva orden</DialogTitle>
 
@@ -410,14 +429,16 @@ export default function PurchaseOrdersPage() {
             Ítems de la orden
           </Typography>
 
-          <Button
-            variant="outlined"
-            sx={{ mb: 2 }}
-            onClick={openReceiptModal}
-            disabled={items.length === 0}
-          >
-            Crear recepción
-          </Button>
+          {canEdit && (
+            <Button
+              variant="outlined"
+              sx={{ mb: 2 }}
+              onClick={openReceiptModal}
+              disabled={items.length === 0}
+            >
+              Crear recepción
+            </Button>
+          )}
 
           <Table size="small">
             <TableHead>
@@ -527,6 +548,46 @@ export default function PurchaseOrdersPage() {
           </TextField>
           
           {newItem.itemType === 'DEVICE' && (
+            <>
+              <TextField
+                select
+                label="Categoría"
+                fullWidth
+                margin="normal"
+                value={selectedItemCategoryId}
+                onChange={(e) => {
+                  setSelectedItemCategoryId(e.target.value);
+                  setNewItem({ ...newItem, deviceModelId: '' });
+                }}
+              >
+                <MenuItem value="">Todas</MenuItem>
+                {categories.map((cat) => (
+                  <MenuItem key={cat.id} value={cat.id}>
+                    {cat.name}
+                  </MenuItem>
+                ))}
+              </TextField>
+              
+              <TextField
+                select
+                label="Modelo de dispositivo"
+                fullWidth
+                margin="normal"
+                value={newItem.deviceModelId}
+                onChange={(e) =>
+                  setNewItem({ ...newItem, deviceModelId: e.target.value })
+                }
+              >
+                {filteredItemModels.map((model) => (
+                  <MenuItem key={model.id} value={model.id}>
+                    {model.brand} {model.model}
+                  </MenuItem>
+                ))}
+              </TextField>
+            </>
+          )}
+          
+          {newItem.itemType === 'DEVICE' && (
             <TextField
               select
               label="Modelo de dispositivo"
@@ -600,17 +661,19 @@ export default function PurchaseOrdersPage() {
         <DialogActions>
           <Button onClick={() => setOpenDetail(false)}>Cerrar</Button>
           
-          <Button
-            variant="contained"
-            onClick={handleCreateItem}
-            disabled={
-              !newItem.quantity ||
-              (newItem.itemType === 'DEVICE' && !newItem.deviceModelId) ||
-              (newItem.itemType === 'CONSUMABLE' && !newItem.consumableId)
-            }
-          >
-            Agregar ítem
-          </Button>
+          {canEdit &&(
+            <Button
+              variant="contained"
+              onClick={handleCreateItem}
+              disabled={
+                !newItem.quantity ||
+                (newItem.itemType === 'DEVICE' && !newItem.deviceModelId) ||
+                (newItem.itemType === 'CONSUMABLE' && !newItem.consumableId)
+              }
+            >
+              Agregar ítem
+            </Button>
+            )}
         </DialogActions>
       </Dialog>
 
@@ -705,7 +768,8 @@ export default function PurchaseOrdersPage() {
             
         <DialogActions>
           <Button onClick={() => setOpenReceipt(false)}>Cancelar</Button>
-            
+
+         {canEdit && (   
           <Button
             variant="contained"
             onClick={handleCreateReceipt}
@@ -715,6 +779,7 @@ export default function PurchaseOrdersPage() {
           >
             Crear recepción
           </Button>
+         )}
         </DialogActions>
       </Dialog>
 

@@ -10,4 +10,8 @@ export class CreateAssignmentDto {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  @IsOptional()
+  @IsString()
+  location?: string;
 }

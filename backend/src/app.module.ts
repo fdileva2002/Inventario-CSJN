@@ -19,6 +19,7 @@ import { ConsumableAssignmentsModule } from './consumable-assignments/consumable
 import { DashboardModule } from './dashboard/dashboard.module';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
+import { DepartmentsModule } from './departments/departments.module';
 
 @Module({
   imports: [
@@ -38,6 +39,7 @@ import { UsersModule } from './users/users.module';
     DashboardModule,
     AuthModule,
     UsersModule,
+    DepartmentsModule,
   ],
   controllers: [ConsumableMovementsController, ConsumableAssignmentsController],
   providers: [ConsumableMovementsService, ConsumableAssignmentsService],

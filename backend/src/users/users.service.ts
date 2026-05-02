@@ -93,7 +93,18 @@ export class UsersService {
   }
 
   async updatePassword(id: number, updateUserPasswordDto: UpdateUserPasswordDto) {
-    await this.findExistingUser(id);
+    const user = await this.findExistingUser(id);
+
+    if (updateUserPasswordDto.currentPassword) {
+      const passwordOk = await bcrypt.compare(
+        updateUserPasswordDto.currentPassword,
+        user.passwordHash, 
+      );
+
+      if (!passwordOk) {
+        throw new BadRequestException('La contraseña actual es incorrecta');
+      }
+    }
 
     const passwordHash = await bcrypt.hash(updateUserPasswordDto.password, 10);
 
@@ -117,11 +128,27 @@ export class UsersService {
       throw new NotFoundException(`No se encontró el usuario con id ${id}`);
     }
 
-    return user;
+    return user; // Prisma infiere el tipo completo incluido passwordHash
   }
 
   private sanitizeUser(user: any) {
     const { passwordHash, ...safeUser } = user;
     return safeUser;
+  }
+
+  async resetPassword(id: number) {
+    await this.findExistingUser(id);
+    
+    const defaultPassword = 'Cdl%4884';
+    const passwordHash = await bcrypt.hash(defaultPassword, 10);
+    
+    await this.prisma.user.update({
+      where: { id },
+      data: { passwordHash },
+    });
+  
+    return {
+      message: `Contraseña reseteada. Nueva contraseña temporal: ${defaultPassword}`,
+    };
   }
 }

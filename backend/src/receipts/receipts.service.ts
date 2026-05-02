@@ -458,6 +458,7 @@ export class ReceiptsService {
   receiptId: number,
   createDevicesFromReceiptDto: CreateDevicesFromReceiptDto,
 ) {
+  
   const receipt = await this.prisma.receipt.findUnique({
     where: { id: receiptId },
     include: {
@@ -503,6 +504,27 @@ export class ReceiptsService {
     );
   }
 
+  
+  const existingDevices = await this.prisma.device.findFirst({
+    where: {
+      purchaseOrderId: receipt.purchaseOrderId,
+      movements: {
+        some: {
+          type: 'INGRESO_POR_COMPRA',
+          detail: {
+            contains: `recepción ${receiptId}`,
+          },
+        },
+      },
+    },
+  });
+
+  if (existingDevices) {
+    throw new BadRequestException(
+      'Los dispositivos de esta recepción ya fueron cargados anteriormente',
+    );
+  }
+
   const statusToConfigure = await this.prisma.deviceStatus.findUnique({
     where: { code: 'DISPONIBLE' },
   });
@@ -539,7 +561,7 @@ export class ReceiptsService {
       }
 
       const category = deviceModel.category;
-      const prefix = this.getTagPrefixByCategory(category.name);
+      const prefix = this.getTagPrefixByCategory(category.name, category.code);
 
       for (let i = 0; i < receiptItem.receivedQuantity; i++) {
         const serialNumber = serials[serialIndex];
@@ -588,22 +610,31 @@ export class ReceiptsService {
     };
   });
  }
- private getTagPrefixByCategory(categoryName: string) {
-  const prefixes: Record<string, string> = {
-    Desktop: 'PC',
-    Notebook: 'NBK',
-    Monitor: 'MON',
-    Impresora: 'IMP',
-    Token: 'TKN',
-    'All-in-one': 'AIO',
-    'Camara Web': 'CAM',
-    DVD: 'DVD',
-    Escaner: 'SCN',
-    'Colector de datos': 'COL',
-  };
 
-  return prefixes[categoryName] ?? 'DEV';
- }
+   private getTagPrefixByCategory(categoryName: string, categoryCode?: string | null) {
+    // Primero usamos el código de la categoría si existe
+    if (categoryCode) {
+      return categoryCode;
+    }
+  
+    // Fallback al mapa hardcodeado
+    const prefixes: Record<string, string> = {
+      Desktop: 'PC',
+      Notebook: 'NBK',
+      Monitor: 'MON',
+      Impresora: 'IMP',
+      Token: 'TKN',
+      'All-in-one': 'AIO',
+      'Camara Web': 'CAM',
+      DVD: 'DVD',
+      Escaner: 'SCN',
+      'Colector de datos': 'COL',
+    };
+  
+    return prefixes[categoryName] ?? 'DEV';
+  }
+
+
 
  private async generateNextTag(tx: PrismaService | any, prefix: string) {
   const lastDevice = await tx.device.findFirst({

@@ -27,5 +27,5 @@ export class CreatePersonDto {
 
   @IsOptional()
   @IsString()
-  department?: string;
+  departmentId?: number;
 }

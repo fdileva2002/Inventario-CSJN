@@ -93,6 +93,13 @@ export class AssignmentsService {
       },
     });
 
+    if (createAssignmentDto.location) {
+      await this.prisma.device.update({
+        where: { id: deviceId },
+        data: { location: createAssignmentDto.location },
+      });
+    }
+
     await this.prisma.deviceMovement.create({
       data: {
         deviceId,

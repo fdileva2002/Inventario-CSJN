@@ -52,4 +52,12 @@ export class UsersController {
   ) {
     return this.usersService.updatePassword(id, updateUserPasswordDto);
   }
+
+  // En users.controller.ts, el endpoint de reset debe tener:
+  @Roles('ADMIN')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Patch(':id/reset-password')
+  resetPassword(@Param('id') id: string) {
+    return this.usersService.resetPassword(+id);
+  }
 }

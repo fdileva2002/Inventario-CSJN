@@ -333,12 +333,28 @@ export class DevicesService {
   }
 
   async remove(id: number) {
-    await this.findOne(id);
+  await this.findOne(id);
 
-    return this.prisma.device.delete({
+  try {
+    return await this.prisma.device.delete({
       where: { id },
     });
+  } catch (error: any) {
+    const message = String(error?.message ?? '');
+
+    if (
+      error.code === 'P2003' ||
+      message.includes('foreign key constraint') ||
+      message.includes('RESTRICT setting')
+    ) {
+      throw new BadRequestException(
+        'No se puede eliminar el dispositivo porque tiene movimientos o asignaciones asociadas',
+      );
+    }
+
+    throw error;
   }
+}
 
   async findMovements(id: number) {
   await this.findOne(id);
@@ -381,7 +397,7 @@ export class DevicesService {
     throw new NotFoundException('El estado indicado no existe');
   }
 
-  const prefix = this.getTagPrefixByCategory(model.category.name);
+  const prefix = this.getTagPrefixByCategory(model.category.name, model.category.code);
 
   try {
     const device = await this.prisma.$transaction(async (tx) => {
@@ -440,22 +456,24 @@ export class DevicesService {
   }
 }
 
-private getTagPrefixByCategory(categoryName: string) {
-  const prefixes: Record<string, string> = {
-    Desktop: 'PC',
-    Notebook: 'NBK',
-    Monitor: 'MON',
-    Impresora: 'IMP',
-    Token: 'TKN',
-    'All-in-one': 'AIO',
-    'Camara Web': 'CAM',
-    DVD: 'DVD',
-    Escaner: 'SCN',
-    'Colector de datos': 'COL',
-  };
+  private getTagPrefixByCategory(categoryName: string, categoryCode?: string | null) {
+    if (categoryCode) return categoryCode;
 
-  return prefixes[categoryName] ?? 'DEV';
-}
+    const prefixes: Record<string, string> = {
+      Desktop: 'PC',
+      Notebook: 'NBK',
+      Monitor: 'MON',
+      Impresora: 'IMP',
+      Token: 'TKN',
+      'All-in-one': 'AIO',
+      'Camara Web': 'CAM',
+      DVD: 'DVD',
+      Escaner: 'SCN',
+      'Colector de datos': 'COL',
+    };
+
+    return prefixes[categoryName] ?? 'DEV';
+  }
 
 private async generateNextTag(tx: any, prefix: string) {
   const lastDevice = await tx.device.findFirst({

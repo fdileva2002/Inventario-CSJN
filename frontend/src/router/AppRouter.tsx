@@ -8,6 +8,7 @@ import PeoplePage from '../pages/PeoplePage';
 import PurchaseOrdersPage from '../pages/PurchaseOrdersPage';
 import SuppliersPage from '../pages/SuppliersPage';
 import DeviceCategoriesPage from '../pages/DeviceCategoriesPage';
+import UsersPage from '../pages/UsersPage';
 
 export default function AppRouter() {
   return (
@@ -65,6 +66,15 @@ export default function AppRouter() {
           element={
             <ProtectedRoute>
               <DeviceCategoriesPage />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/users"
+          element={
+            <ProtectedRoute>
+              <UsersPage />
             </ProtectedRoute>
           }
         />

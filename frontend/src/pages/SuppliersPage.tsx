@@ -17,6 +17,7 @@ import {
 } from '@mui/material';
 import { api } from '../api/axios';
 import AppLayout from '../components/AppLayout';
+import { getUser } from '../auth/auth.storage';
 
 type Supplier = {
   id: number;
@@ -43,6 +44,9 @@ export default function SuppliersPage() {
       email: '',
       phone: '',
     });
+
+    const user = getUser();
+    const canEdit = user?.role === 'EDICION';
 
   async function loadSuppliers() {
     const response = await api.get('/suppliers', {
@@ -132,13 +136,11 @@ export default function SuppliersPage() {
         Proveedores
       </Typography>
 
-      <Button
-        variant="contained"
-        sx={{ mb: 2 }}
-        onClick={() => setOpenCreate(true)}
-      >
-        Nuevo proveedor
-      </Button>
+      {canEdit && (
+        <Button variant="contained" sx={{ mb: 2 }} onClick={() => setOpenCreate(true)}>
+          Nuevo proveedor
+        </Button>
+      )}
 
       <Paper sx={{ p: 2, mb: 3 }}>
         <Box sx={{ display: 'flex', gap: 2 }}>
@@ -182,24 +184,19 @@ export default function SuppliersPage() {
                 <TableCell>{supplier.email || '-'}</TableCell>
                 <TableCell>{supplier.phone || '-'}</TableCell>
                 <TableCell>
-                  <Button
-                    size="small"
-                    variant="outlined"
-                    onClick={() => openEditModal(supplier)}
-                  >
-                    Editar
-                  </Button>
-
-                  <Button
-                    size="small"
-                    color="error"
-                    sx={{ ml: 1 }}
-                    onClick={() => handleDeleteSupplier(supplier)}
-                  >
-                    Eliminar
-                  </Button>
+                  {canEdit && (
+                    <Box sx={{ display: 'flex', gap: 1 }}>
+                      <Button size="small" variant="outlined" onClick={() => openEditModal(supplier)}>
+                        Editar
+                      </Button>
+                      <Button size="small" variant="outlined" color="error" onClick={() => handleDeleteSupplier(supplier)}>
+                        Eliminar
+                      </Button>
+                    </Box>
+                  )}
                 </TableCell>
-              </TableRow>
+
+                </TableRow>
             ))}
 
             {suppliers.length === 0 && (

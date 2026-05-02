@@ -110,15 +110,18 @@ export default function DevicesPage() {
   const [assignmentForm, setAssignmentForm] = useState({
     personId: '',
     notes: '',
+    location: '',
   });
   const [manageHostname, setManageHostname] = useState('');
   const [statusForm, setStatusForm] = useState({
     statusCode: '',
     notes: '',
+    location: '',
   });
   const [openDetail, setOpenDetail] = useState(false);
   const [detailDevice, setDetailDevice] = useState<Device | null>(null);
   const [movements, setMovements] = useState<DeviceMovement[]>([]);
+  const [openDelete, setOpenDelete] = useState(false);
 
   async function loadDevices() {
     const params: any = {};
@@ -149,28 +152,31 @@ export default function DevicesPage() {
   }
 
   async function handleCreateDevice() {
-    await api.post('/devices/manual-smart', {
-      modelId: Number(newDevice.modelId),
-      serialNumber: newDevice.serialNumber,
-      hostname: newDevice.hostname,
-      location: newDevice.location,
-      statusCode: newDevice.statusCode,
-      notes: newDevice.notes,
-    });
-
-    setSelectedCategoryId('');
-    setOpenCreate(false);
-
-    setNewDevice({
-      modelId: '',
-      serialNumber: '',
-      hostname: '',
-      location: '',
-      statusCode: 'DISPONIBLE',
-      notes: '',
-    });
-
-    loadDevices();
+    try {
+      await api.post('/devices/manual-smart', {
+        modelId: Number(newDevice.modelId),
+        serialNumber: newDevice.serialNumber,
+        hostname: newDevice.hostname,
+        location: newDevice.location,
+        statusCode: newDevice.statusCode,
+        notes: newDevice.notes,
+      });
+    
+      setSelectedCategoryId('');
+      setOpenCreate(false);
+      setNewDevice({
+        modelId: '',
+        serialNumber: '',
+        hostname: '',
+        location: '',
+        statusCode: 'DISPONIBLE',
+        notes: '',
+      });
+    
+      loadDevices();
+    } catch (error: any) {
+      alert(error?.response?.data?.message || 'Error al crear dispositivo');
+    }
   }
 
   async function loadModels() {
@@ -208,10 +214,12 @@ export default function DevicesPage() {
     setAssignmentForm({
       personId: '',
       notes: '',
+      location: '',
     });
     setStatusForm({
       statusCode: '',
       notes: '',
+      location: '',
     });
     setOpenManage(true);
   }
@@ -219,20 +227,21 @@ export default function DevicesPage() {
   async function handleAssignDevice() {
     if (!selectedDevice) return;
 
-    await api.post('/assignments', {
-      deviceId: selectedDevice.id,
-      personId: Number(assignmentForm.personId),
-      notes: assignmentForm.notes,
-    });
+    try {
+      await api.post('/assignments', {
+        deviceId: selectedDevice.id,
+        personId: Number(assignmentForm.personId),
+        notes: assignmentForm.notes,
+        location: assignmentForm.location || undefined,
+      });
 
-    setOpenManage(false);
-    setSelectedDevice(null);
-    setAssignmentForm({
-      personId: '',
-      notes: '',
-    });
-
-    loadDevices();
+      setOpenManage(false);
+      setSelectedDevice(null);
+      setAssignmentForm({ personId: '', notes: '', location: '' });
+      loadDevices();
+    } catch (error: any) {
+      alert(error?.response?.data?.message || 'Error al asignar dispositivo');
+    }
   }
 
   async function handleUpdateHostname() {
@@ -274,6 +283,7 @@ export default function DevicesPage() {
     setStatusForm({
       statusCode: '',
       notes: '',
+      location: '',
     });
 
     loadDevices();
@@ -293,6 +303,18 @@ export default function DevicesPage() {
   const response = await api.get(`/devices/${device.id}/movements`);
   setMovements(response.data);
 }
+
+  async function handleDeleteDevice() {
+    if (!selectedDevice) return;
+    try {
+      await api.delete(`/devices/${selectedDevice.id}`);
+      setOpenDelete(false);
+      setSelectedDevice(null);
+      loadDevices();
+    } catch (error: any) {
+      alert(error?.response?.data?.message || 'Error al eliminar dispositivo');
+    }
+  }
 
   return (
     <AppLayout>
@@ -420,16 +442,33 @@ export default function DevicesPage() {
                 <TableCell>
                   {device.assignments?.[0]?.person?.fullName || 'Sin asignar'}
                 </TableCell>
+                
                 <TableCell>
-                  {canEdit && (
-                    <Button
-                      size="small"
-                      variant="outlined"
-                      onClick={() => openManageModal(device)}
-                    >
-                      Gestionar
-                    </Button>
-                  )}
+                  <Box sx={{ display: 'flex', gap: 1 }}>
+                    {canEdit && (
+                      <>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          onClick={() => openManageModal(device)}
+                        >
+                          Gestionar
+                        </Button>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          color="error"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedDevice(device);
+                            setOpenDelete(true);
+                          }}
+                        >
+                          Eliminar
+                        </Button>
+                      </>
+                    )}
+                  </Box>
                 </TableCell>
               </TableRow>
             ))}
@@ -642,6 +681,16 @@ export default function DevicesPage() {
                     </MenuItem>
                   ))}
                 </TextField>
+
+                <TextField
+                  label="Ubicación (opcional)"
+                  fullWidth
+                  margin="normal"
+                  value={assignmentForm.location}
+                  onChange={(e) =>
+                    setAssignmentForm({ ...assignmentForm, location: e.target.value })
+                  }
+                />
                 
                 <TextField
                   label="Observaciones"
@@ -777,6 +826,23 @@ export default function DevicesPage() {
               
           <DialogActions>
             <Button onClick={() => setOpenDetail(false)}>Cerrar</Button>
+          </DialogActions>
+        </Dialog>
+
+        <Dialog open={openDelete} onClose={() => setOpenDelete(false)} maxWidth="xs" fullWidth>
+          <DialogTitle>Eliminar dispositivo</DialogTitle>
+          <DialogContent>
+            <Typography>
+              ¿Confirmás que querés eliminar el dispositivo{' '}
+              <strong>{selectedDevice?.tag}</strong>?
+              Esta acción no se puede deshacer.
+            </Typography>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setOpenDelete(false)}>Cancelar</Button>
+            <Button variant="contained" color="error" onClick={handleDeleteDevice}>
+              Eliminar
+            </Button>
           </DialogActions>
         </Dialog>
     </AppLayout>

@@ -20,6 +20,7 @@ import {
 } from '@mui/material';
 import { api } from '../api/axios';
 import AppLayout from '../components/AppLayout';
+import { getUser } from '../auth/auth.storage';
 
 type Consumable = {
   id: number;
@@ -87,6 +88,9 @@ export default function ConsumablesPage() {
     const [selectedConsumableHistory, setSelectedConsumableHistory] =
       useState<Consumable | null>(null);
     const [movements, setMovements] = useState<ConsumableMovement[]>([]);
+    const user = getUser();
+    const canEdit = user?.role === 'EDICION';
+    const [openDelete, setOpenDelete] = useState(false);
 
   async function loadConsumables() {
     const params: any = {};
@@ -149,24 +153,27 @@ export default function ConsumablesPage() {
 
     async function handleCreateMovement() {
       if (!selectedConsumable) return;
-
-      await api.post('/consumable-movements', {
-        consumableId: selectedConsumable.id,
-        type: movementForm.type,
-        quantity: Number(movementForm.quantity),
-        detail: movementForm.detail,
-      });
-
-      setOpenMovement(false);
-      setSelectedConsumable(null);
-
-      setMovementForm({
-        type: 'AJUSTE_POSITIVO',
-        quantity: '',
-        detail: '',
-      });
-
-      loadConsumables();
+        
+      try {
+        await api.post('/consumable-movements', {
+          consumableId: selectedConsumable.id,
+          type: movementForm.type,
+          quantity: Number(movementForm.quantity),
+          detail: movementForm.detail,
+        });
+      
+        setOpenMovement(false);
+        setSelectedConsumable(null);
+        setMovementForm({
+          type: 'AJUSTE_POSITIVO',
+          quantity: '',
+          detail: '',
+        });
+      
+        loadConsumables();
+      } catch (error: any) {
+        alert(error?.response?.data?.message || 'Error al registrar movimiento');
+      }
     }
 
     async function loadPeople() {
@@ -223,19 +230,41 @@ export default function ConsumablesPage() {
       setMovements(response.data);
     }
 
+  
+  function resetCreateConsumableModal() {
+    setNewConsumable({
+      name: '',
+      brand: '',
+      model: '',
+      variant: '',
+      minimumStock: '',
+      unitMeasure: 'unidad',
+    });
+    setOpenCreate(false);
+  }
+
+  async function handleDeleteConsumable() {
+    if (!selectedConsumable) return;
+    try {
+      await api.delete(`/consumables/${selectedConsumable.id}`);
+      setOpenDelete(false);
+      setSelectedConsumable(null);
+      loadConsumables();
+    } catch (error: any) {
+      alert(error?.response?.data?.message || 'Error al eliminar consumible');
+    }
+  }
   return (
     <AppLayout>
       <Typography variant="h4" sx={{ mb: 3 }}>
         Consumibles
       </Typography>
 
-        <Button
-          variant="contained"
-          sx={{ mb: 2 }}
-          onClick={() => setOpenCreate(true)}
-        >
-          Nuevo consumible
-        </Button>
+        {canEdit && (
+          <Button variant="contained" sx={{ mb: 2 }} onClick={() => setOpenCreate(true)}>
+            Nuevo consumible
+          </Button>
+        )}
 
       <Paper sx={{ p: 2, mb: 3 }}>
         <Typography variant="h6" sx={{ mb: 2 }}>
@@ -308,23 +337,41 @@ export default function ConsumablesPage() {
                   <TableCell>
                     {isLowStock ? 'Stock bajo' : 'Stock OK'}
                   </TableCell>
-                    <TableCell>
-                      <Button
-                        size="small"
-                        variant="outlined"
-                        onClick={() => openMovementModal(consumable)}
-                      >
-                        Ajustar stock
-                      </Button>
-                        <Button
-                          size="small"
-                          variant="contained"
-                          sx={{ ml: 1 }}
-                          onClick={() => openAssignModal(consumable)}
-                        >
-                          Asignar
-                        </Button>
-                    </TableCell>
+                  
+                  <TableCell>
+                    <Box sx={{ display: 'flex', gap: 1 }}>
+                      {canEdit && (
+                        <>
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            onClick={() => openMovementModal(consumable)}
+                          >
+                            Ajustar stock
+                          </Button>
+                          <Button
+                            size="small"
+                            variant="contained"
+                            onClick={() => openAssignModal(consumable)}
+                          >
+                            Asignar
+                          </Button>
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            color="error"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedConsumable(consumable);
+                              setOpenDelete(true);
+                            }}
+                          >
+                            Eliminar
+                          </Button>
+                        </>
+                      )}
+                    </Box>
+                  </TableCell>
                 </TableRow>
               );
             })}
@@ -341,7 +388,7 @@ export default function ConsumablesPage() {
       </Paper>
             <Dialog
               open={openCreate}
-              onClose={() => setOpenCreate(false)}
+              onClose={resetCreateConsumableModal}
               maxWidth="sm"
               fullWidth
             >
@@ -416,7 +463,7 @@ export default function ConsumablesPage() {
               </DialogContent>
               
               <DialogActions>
-                <Button onClick={() => setOpenCreate(false)}>Cancelar</Button>
+                <Button onClick={resetCreateConsumableModal}>Cancelar</Button>
                 <Button
                   variant="contained"
                   onClick={handleCreateConsumable}
@@ -617,6 +664,25 @@ export default function ConsumablesPage() {
                 
               <DialogActions>
                 <Button onClick={() => setOpenHistory(false)}>Cerrar</Button>
+              </DialogActions>
+            </Dialog>
+
+            <Dialog open={openDelete} onClose={() => setOpenDelete(false)} maxWidth="xs" fullWidth>
+              <DialogTitle>Eliminar consumible</DialogTitle>
+              <DialogContent>
+                <Typography>
+                  ¿Confirmás que querés eliminar{' '}
+                  <strong>
+                    {selectedConsumable?.name} {selectedConsumable?.model}
+                  </strong>?
+                  Esta acción no se puede deshacer.
+                </Typography>
+              </DialogContent>
+              <DialogActions>
+                <Button onClick={() => setOpenDelete(false)}>Cancelar</Button>
+                <Button variant="contained" color="error" onClick={handleDeleteConsumable}>
+                  Eliminar
+                </Button>
               </DialogActions>
             </Dialog>
     </AppLayout>
