@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import {
   Box,
   Button,
+  Chip,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -13,12 +14,14 @@ import {
   TableCell,
   TableHead,
   TableRow,
+  TablePagination,
   TextField,
   Typography,
 } from '@mui/material';
 import { api } from '../api/axios';
 import AppLayout from '../components/AppLayout';
 import { getUser } from '../auth/auth.storage';
+import * as XLSX from 'xlsx';
 
 type Device = {
   id: number;
@@ -37,6 +40,7 @@ type Device = {
     person: {
       fullName: string;
     };
+    department?: { name: string } | null;
     
   }[];
 };
@@ -82,7 +86,7 @@ export default function DevicesPage() {
   const [search, setSearch] = useState('');
   const [statusCode, setStatusCode] = useState('');
   const [categoryName, setCategoryName] = useState('');
-  const [assigned, setAssigned] = useState('');
+  const [assignedTo, setAssignedTo] = useState('');
   const [location, setLocation] = useState('');
   const [openCreate, setOpenCreate] = useState(false);
   const [newDevice, setNewDevice] = useState({
@@ -108,10 +112,11 @@ export default function DevicesPage() {
   const [openManage, setOpenManage] = useState(false);
 
   const [assignmentForm, setAssignmentForm] = useState({
-    personId: '',
-    notes: '',
-    location: '',
-  });
+  personId: '',
+  departmentId: '',
+  notes: '',
+  location: '',
+});
   const [manageHostname, setManageHostname] = useState('');
   const [statusForm, setStatusForm] = useState({
     statusCode: '',
@@ -122,18 +127,27 @@ export default function DevicesPage() {
   const [detailDevice, setDetailDevice] = useState<Device | null>(null);
   const [movements, setMovements] = useState<DeviceMovement[]>([]);
   const [openDelete, setOpenDelete] = useState(false);
+  const [departments, setDepartments] = useState<{id: number, name: string}[]>([]);
+  const [assignmentTarget, setAssignmentTarget] = useState<'person' | 'department'>('person');
+  const [modelId, setModelId] = useState('');
+  const [page, setPage] = useState(0);
+  const rowsPerPage = 40; // dispositivos por página
+  const [assignedSearch, setAssignedSearch] = useState('');
 
   async function loadDevices() {
     const params: any = {};
 
-    if (search) params.search = search;
+    if (search.trim()) params.search = search;
+    if (assignedSearch.trim()) params.search = assignedSearch;
     if (statusCode) params.statusCode = statusCode;
-    if (categoryName) params.categoryName = categoryName;
-    if (assigned) params.assigned = assigned;
+    if (categoryName) params.categoryName = categoryName; 
     if (location) params.search = location;
+    if (modelId) params.modelId = Number(modelId);
+    if (assignedTo.trim()) params.assignedTo = assignedTo;
 
     const response = await api.get('/devices', { params });
     setDevices(response.data);
+    setPage(0);
   }
 
   useEffect(() => {
@@ -141,14 +155,18 @@ export default function DevicesPage() {
     loadModels();
     loadCategories();
     loadPeople();
+
+    api.get('/departments').then((res) => setDepartments(res.data));
   }, []);
 
   function clearFilters() {
     setSearch('');
     setStatusCode('');
     setCategoryName('');
-    setAssigned('');
+    setAssignedSearch('');
     setLocation('');
+    setModelId('');
+    setAssignedTo('');
   }
 
   async function handleCreateDevice() {
@@ -213,6 +231,7 @@ export default function DevicesPage() {
     setManageHostname(device.hostname || '');
     setAssignmentForm({
       personId: '',
+      departmentId: '',
       notes: '',
       location: '',
     });
@@ -230,14 +249,16 @@ export default function DevicesPage() {
     try {
       await api.post('/assignments', {
         deviceId: selectedDevice.id,
-        personId: Number(assignmentForm.personId),
+        personId: assignmentTarget === 'person' ? Number(assignmentForm.personId) : undefined,
+        departmentId: assignmentTarget === 'department' ? Number(assignmentForm.departmentId) : undefined,
         notes: assignmentForm.notes,
         location: assignmentForm.location || undefined,
       });
 
       setOpenManage(false);
       setSelectedDevice(null);
-      setAssignmentForm({ personId: '', notes: '', location: '' });
+      setAssignmentForm({ personId: '', departmentId: '', notes: '', location: '' });
+      setAssignmentTarget('person');
       loadDevices();
     } catch (error: any) {
       alert(error?.response?.data?.message || 'Error al asignar dispositivo');
@@ -271,22 +292,31 @@ export default function DevicesPage() {
   }
 
   async function handleChangeStatus() {
-  if (!selectedDevice) return;
+    if (!selectedDevice || !statusForm.statusCode) return;
 
-  await api.patch(`/devices/${selectedDevice.id}/status`, {
-      statusCode: statusForm.statusCode,
-      notes: statusForm.notes,
-    });
+    const statusLabel = availableStatuses.find(
+      (s) => s.code === statusForm.statusCode
+    )?.label;
 
-    setOpenManage(false);
-    setSelectedDevice(null);
-    setStatusForm({
-      statusCode: '',
-      notes: '',
-      location: '',
-    });
+    const confirmed = window.confirm(
+      `¿Confirmás cambiar el estado de ${selectedDevice.tag} a "${statusLabel}"?`
+    );
 
-    loadDevices();
+    if (!confirmed) return;
+
+    try {
+      await api.patch(`/devices/${selectedDevice.id}/status`, {
+        statusCode: statusForm.statusCode,
+        notes: statusForm.notes,
+      });
+
+      setOpenManage(false);
+      setSelectedDevice(null);
+      setStatusForm({ statusCode: '', notes: '', location:'' });
+      loadDevices();
+    } catch (error: any) {
+      alert(error?.response?.data?.message || 'Error al cambiar estado');
+    }
   }
 
   const availableStatuses = [
@@ -316,20 +346,41 @@ export default function DevicesPage() {
     }
   }
 
+  function exportToExcel() {
+    const rows = devices.map((device) => ({
+      Tag: device.tag,
+      'Número de serie': device.serialNumber,
+      Hostname: device.hostname || '-',
+      Categoría: device.category?.name || '-',
+      Marca: device.model?.brand || '-',
+      Modelo: device.model?.model || '-',
+      Estado: device.status?.name || '-',
+      Ubicación: device.location || '-',
+      'Asignado a': device.assignments?.[0]?.person?.fullName || 'Sin asignar',
+    }));
+  
+    const worksheet = XLSX.utils.json_to_sheet(rows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Dispositivos');
+    XLSX.writeFile(workbook, `dispositivos_${new Date().toLocaleDateString('es-AR').replace(/\//g, '-')}.xlsx`);
+  }
+
   return (
     <AppLayout>
       <Typography variant="h4" sx={{ mb: 3 }}>
         Dispositivos
       </Typography>
 
-      {canEdit && (
-        <Button variant="contained" 
-        sx={{ mb: 2 }}
-        onClick={() => setOpenCreate(true)}
-        >
-          Nuevo dispositivo
+      <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
+        {canEdit && (
+          <Button variant="contained" onClick={() => setOpenCreate(true)}>
+            Nuevo dispositivo
+          </Button>
+        )}
+        <Button variant="outlined" onClick={exportToExcel} disabled={devices.length === 0}>
+          Exportar a Excel
         </Button>
-      )}
+      </Box>
 
       <Paper sx={{ p: 2, mb: 3 }}>
         <Typography variant="h6" sx={{ mb: 2 }}>
@@ -366,24 +417,41 @@ export default function DevicesPage() {
             select
             label="Categoría"
             value={categoryName}
-            onChange={(e) => setCategoryName(e.target.value)}
+            onChange={(e) => {
+              setCategoryName(e.target.value);
+              setModelId(''); // limpiar modelo al cambiar categoría
+            }}
           >
             <MenuItem value="">Todas</MenuItem>
-            <MenuItem value="Notebook">Notebook</MenuItem>
-            <MenuItem value="Desktop">Desktop</MenuItem>
-            <MenuItem value="Monitor">Monitor</MenuItem>
+            {categories.map((cat) => (
+              <MenuItem key={cat.id} value={cat.name}>
+                {cat.name}
+              </MenuItem>
+            ))}
           </TextField>
 
           <TextField
             select
-            label="Asignado"
-            value={assigned}
-            onChange={(e) => setAssigned(e.target.value)}
+            label="Modelo"
+            value={modelId}
+            onChange={(e) => setModelId(e.target.value)}
           >
             <MenuItem value="">Todos</MenuItem>
-            <MenuItem value="true">Sí</MenuItem>
-            <MenuItem value="false">No</MenuItem>
+            {models
+              .filter((m) => categoryName === '' || m.category?.name === categoryName)
+              .map((model) => (
+                <MenuItem key={model.id} value={model.id}>
+                  {model.brand} {model.model}
+                </MenuItem>
+              ))}
           </TextField>
+
+          
+          <TextField
+            label="Persona o dependencia"
+            value={assignedTo}
+            onChange={(e) => setAssignedTo(e.target.value)}
+          />
 
           <TextField
             label="Ubicación"
@@ -421,7 +489,9 @@ export default function DevicesPage() {
           </TableHead>
 
           <TableBody>
-            {devices.map((device) => (
+            {devices
+              .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
+              .map((device) => (
               <TableRow
                 key={device.id}
                 hover
@@ -437,10 +507,27 @@ export default function DevicesPage() {
                     ? `${device.model.brand} - ${device.model.model}`
                     : '-'}
                 </TableCell>
-                <TableCell>{device.status?.name || '-'}</TableCell>
+                <TableCell>
+                  <Chip
+                    label={device.status?.name || '-'}
+                    size="small"
+                    color={
+                      device.status?.code === 'DISPONIBLE' ? 'success' :
+                      device.status?.code === 'EN_FUNCIONAMIENTO' ? 'primary' :
+                      device.status?.code === 'EN_REPARACION' ? 'warning' :
+                      device.status?.code === 'EN_BAJA' ? 'error' :
+                      device.status?.code === 'A_CONFIGURAR' ? 'default' :
+                      'default'
+                    }
+                  />
+                </TableCell>
                 <TableCell>{device.location || '-'}</TableCell>
                 <TableCell>
-                  {device.assignments?.[0]?.person?.fullName || 'Sin asignar'}
+                  {device.assignments?.[0]?.person?.fullName
+                    ? device.assignments[0].person.fullName
+                    : device.assignments?.[0]?.department?.name
+                    ? `Dep: ${device.assignments[0].department.name}`
+                    : 'Sin asignar'}
                 </TableCell>
                 
                 <TableCell>
@@ -482,6 +569,17 @@ export default function DevicesPage() {
             )}
           </TableBody>
         </Table>
+        <TablePagination
+          component="div"
+          count={devices.length}
+          page={page}
+          onPageChange={(_, newPage) => setPage(newPage)}
+          rowsPerPage={rowsPerPage}
+          rowsPerPageOptions={[40]}
+          labelDisplayedRows={({ from, to, count }) =>
+            `${from}–${to} de ${count}`
+          }
+        />
       </Paper>
 
       <Dialog open={openCreate} onClose={resetCreateModal} maxWidth="sm" fullWidth>
@@ -608,27 +706,37 @@ export default function DevicesPage() {
               Estado actual: {selectedDevice?.status?.name || '-'}
             </Typography>
 
-              <TextField
-                  select
-                  label="Cambiar estado"
-                  fullWidth
-                  margin="normal"
-                  value={statusForm.statusCode}
-                  onChange={(e) =>
-                    setStatusForm({
-                      ...statusForm,
-                      statusCode: e.target.value,
-                    })
-                  }
-                >
-                  <MenuItem value="">Seleccionar estado</MenuItem>
-
-                  {availableStatuses.map((status) => (
-                    <MenuItem key={status.code} value={status.code}>
-                      {status.label}
-                    </MenuItem>
-                  ))}
-              </TextField>
+              {selectedDevice?.status?.code !== 'EN_FUNCIONAMIENTO' && (
+                <>
+                  <TextField
+                    select
+                    label="Cambiar estado"
+                    fullWidth
+                    margin="normal"
+                    value={statusForm.statusCode}
+                    onChange={(e) =>
+                      setStatusForm({ ...statusForm, statusCode: e.target.value })
+                    }
+                  >
+                    <MenuItem value="">Seleccionar estado</MenuItem>
+                    {availableStatuses.map((status) => (
+                      <MenuItem key={status.code} value={status.code}>
+                        {status.label}
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                  
+                  <TextField
+                    label="Motivo / observación del cambio"
+                    fullWidth
+                    margin="normal"
+                    value={statusForm.notes}
+                    onChange={(e) =>
+                      setStatusForm({ ...statusForm, notes: e.target.value })
+                    }
+                  />
+                </>
+              )}
                 
                 <TextField
                   label="Motivo / observación del cambio"
@@ -664,23 +772,54 @@ export default function DevicesPage() {
 
                 <TextField
                   select
-                  label="Asignar a persona"
+                  label="Asignar a"
                   fullWidth
                   margin="normal"
-                  value={assignmentForm.personId}
-                  onChange={(e) =>
-                    setAssignmentForm({
-                      ...assignmentForm,
-                      personId: e.target.value,
-                    })
-                  }
+                  value={assignmentTarget}
+                  onChange={(e) => {
+                    setAssignmentTarget(e.target.value as 'person' | 'department');
+                    setAssignmentForm({ ...assignmentForm, personId: '', departmentId: '' });
+                  }}
                 >
-                  {people.map((person) => (
-                    <MenuItem key={person.id} value={person.id}>
-                      {person.fullName} - {person.employeeId}
-                    </MenuItem>
-                  ))}
+                  <MenuItem value="person">Persona</MenuItem>
+                  <MenuItem value="department">Dependencia</MenuItem>
                 </TextField>
+                
+                {assignmentTarget === 'person' ? (
+                  <TextField
+                    select
+                    label="Persona"
+                    fullWidth
+                    margin="normal"
+                    value={assignmentForm.personId}
+                    onChange={(e) =>
+                      setAssignmentForm({ ...assignmentForm, personId: e.target.value })
+                    }
+                  >
+                    {people.map((person) => (
+                      <MenuItem key={person.id} value={person.id}>
+                        {person.fullName} {person.employeeId ? `(${person.employeeId})` : ''}
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                ) : (
+                  <TextField
+                    select
+                    label="Dependencia"
+                    fullWidth
+                    margin="normal"
+                    value={assignmentForm.departmentId ?? ''}
+                    onChange={(e) =>
+                      setAssignmentForm({ ...assignmentForm, departmentId: e.target.value })
+                    }
+                  >
+                    {departments.map((dept) => (
+                      <MenuItem key={dept.id} value={dept.id}>
+                        {dept.name}
+                      </MenuItem>
+                    ))}
+                  </TextField>
+                )}
 
                 <TextField
                   label="Ubicación (opcional)"
@@ -728,19 +867,25 @@ export default function DevicesPage() {
               <Button
                 variant="contained"
                 onClick={handleAssignDevice}
-                disabled={!assignmentForm.personId}
+                disabled={
+                  assignmentTarget === 'person'
+                    ? !assignmentForm.personId
+                    : !assignmentForm.departmentId
+                }
               >
                 Asignar
               </Button>
             )}
 
-            <Button
-              variant="outlined"
-              onClick={handleChangeStatus}
-              disabled={!statusForm.statusCode}
-            >
-              Cambiar estado
-            </Button>
+            {selectedDevice?.status?.code !== 'EN_FUNCIONAMIENTO' && (
+              <Button
+                variant="outlined"
+                onClick={handleChangeStatus}
+                disabled={!statusForm.statusCode}
+              >
+                Cambiar estado
+              </Button>
+            )}
           </DialogActions>
         </Dialog>
 

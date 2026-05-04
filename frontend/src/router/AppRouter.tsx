@@ -9,6 +9,7 @@ import PurchaseOrdersPage from '../pages/PurchaseOrdersPage';
 import SuppliersPage from '../pages/SuppliersPage';
 import DeviceCategoriesPage from '../pages/DeviceCategoriesPage';
 import UsersPage from '../pages/UsersPage';
+import DepartmentsPage from '../pages/DepartmentsPage';
 
 export default function AppRouter() {
   return (
@@ -75,6 +76,16 @@ export default function AppRouter() {
           element={
             <ProtectedRoute>
               <UsersPage />
+            </ProtectedRoute>
+          }
+        />
+
+        
+        <Route
+          path="/departments"
+          element={
+            <ProtectedRoute>
+              <DepartmentsPage />
             </ProtectedRoute>
           }
         />

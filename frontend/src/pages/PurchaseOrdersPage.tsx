@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import {
   Box,
   Button,
+  Chip,
   Paper,
   MenuItem,
   Table,
@@ -20,10 +21,12 @@ import { api } from '../api/axios';
 import AppLayout from '../components/AppLayout';
 import { getUser } from '../auth/auth.storage';
 
+
 type PurchaseOrder = {
   id: number;
   number: string;
   date: string;
+  status?: string;
   supplier?: {
     id: number;
     name: string;
@@ -68,19 +71,16 @@ type Receipt = {
   receiptNumber: string;
   receivedAt: string;
   notes?: string | null;
+  devicesCreated?: number;
+  totalDevicesExpected?: number;
+  devicesFullyLoaded?: boolean;
   items?: {
     id: number;
     receivedQuantity: number;
     purchaseOrderItem?: {
       itemType: 'DEVICE' | 'CONSUMABLE';
-      deviceModel?: {
-        brand: string;
-        model: string;
-      } | null;
-      consumable?: {
-        name: string;
-        model: string;
-      } | null;
+      deviceModel?: { brand: string; model: string } | null;
+      consumable?: { name: string; model: string } | null;
     };
   }[];
 };
@@ -126,6 +126,20 @@ export default function PurchaseOrdersPage() {
   const user = getUser();
   const canEdit = user?.role === 'EDICION';
   const [selectedItemCategoryId, setSelectedItemCategoryId] = useState('');
+
+  const [openDelete, setOpenDelete] = useState(false);
+
+  async function handleDeleteOrder() {
+    if (!selectedOrder) return;
+    try {
+      await api.delete(`/purchase-orders/${selectedOrder.id}`);
+      setOpenDelete(false);
+      setSelectedOrder(null);
+      loadOrders();
+    } catch (error: any) {
+      alert(error?.response?.data?.message || 'Error al eliminar orden');
+    }
+  }
 
   const filteredItemModels = selectedItemCategoryId
     ? models.filter((m: any) => m.category?.id === Number(selectedItemCategoryId))
@@ -349,12 +363,14 @@ export default function PurchaseOrdersPage() {
       <Paper sx={{ p: 2 }}>
         <Table>
           <TableHead>
-            <TableRow>
-              <TableCell>Número</TableCell>
-              <TableCell>Proveedor</TableCell>
-              <TableCell>Fecha</TableCell>
-            </TableRow>
-          </TableHead>
+          <TableRow>
+            <TableCell>Número</TableCell>
+            <TableCell>Proveedor</TableCell>
+            <TableCell>Fecha</TableCell>
+            <TableCell>Estado</TableCell> 
+            {canEdit && <TableCell>Acciones</TableCell>}
+          </TableRow>
+        </TableHead>
 
           <TableBody>
             {orders.map((order) => (
@@ -367,6 +383,41 @@ export default function PurchaseOrdersPage() {
                 <TableCell>{order.number}</TableCell>
                 <TableCell>{order.supplier?.name || '-'}</TableCell>
                 <TableCell>{new Date(order.date).toLocaleDateString()}</TableCell>
+                <TableCell>
+                <Chip
+                  label={
+                    order.status === 'PENDIENTE' ? 'Pendiente' :
+                    order.status === 'PARCIAL' ? 'Parcial' :
+                    order.status === 'COMPLETA' ? 'Completa' :
+                    order.status === 'ANULADA' ? 'Anulada' : '-'
+                  }
+                  color={
+                    order.status === 'PENDIENTE' ? 'warning' :
+                    order.status === 'PARCIAL' ? 'info' :
+                    order.status === 'COMPLETA' ? 'success' :
+                    order.status === 'ANULADA' ? 'error' : 'default'
+                  }
+                  size="small"
+                />
+              </TableCell>
+
+              {canEdit && (
+                <TableCell>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    color="error"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedOrder(order);
+                      setOpenDelete(true);
+                    }}
+                  >
+                    Eliminar
+                  </Button>
+                </TableCell>
+              )}
+
               </TableRow>
             ))}
           </TableBody>
@@ -479,27 +530,51 @@ export default function PurchaseOrdersPage() {
           <Typography variant="h6" sx={{ mt: 4, mb: 2 }}>
             Recepciones
           </Typography>
-
+                      
           <Table size="small">
             <TableHead>
               <TableRow>
                 <TableCell>Número</TableCell>
                 <TableCell>Fecha</TableCell>
                 <TableCell>Ítems recibidos</TableCell>
+                <TableCell>Dispositivos</TableCell>
                 <TableCell>Acciones</TableCell>
               </TableRow>
             </TableHead>
-
+                      
             <TableBody>
               {receipts.map((receipt) => (
                 <TableRow key={receipt.id}>
-                  <TableCell>{receipt.receiptNumber}</TableCell>
+                  <TableCell>
+                    {receipt.receiptNumber || `Recepción ${receipt.id}`}
+                  </TableCell>
                   <TableCell>
                     {new Date(receipt.receivedAt).toLocaleDateString()}
                   </TableCell>
                   <TableCell>{receipt.items?.length ?? 0}</TableCell>
                   <TableCell>
-                    {receiptHasDevices(receipt) ? (
+                    {receipt.totalDevicesExpected && receipt.totalDevicesExpected > 0 ? (
+                      receipt.devicesFullyLoaded ? (
+                        <Typography
+                          variant="body2"
+                          color="success.main"
+                          sx={{ fontWeight: 'bold' }}
+                        >
+                          ✓ Cargados ({receipt.devicesCreated}/{receipt.totalDevicesExpected})
+                        </Typography>
+                      ) : (
+                        <Typography variant="body2" color="warning.main">
+                          {receipt.devicesCreated ?? 0}/{receipt.totalDevicesExpected} cargados
+                        </Typography>
+                      )
+                    ) : (
+                      <Typography variant="body2" color="text.secondary">
+                        No aplica
+                      </Typography>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {receiptHasDevices(receipt) && canEdit && !receipt.devicesFullyLoaded ? (
                       <Button
                         size="small"
                         variant="outlined"
@@ -507,16 +582,22 @@ export default function PurchaseOrdersPage() {
                       >
                         Cargar devices
                       </Button>
+                    ) : receipt.devicesFullyLoaded ? (
+                      <Typography variant="body2" color="text.secondary">
+                        Completo
+                      </Typography>
                     ) : (
-                      <Typography color="text.secondary">No aplica</Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        No aplica
+                      </Typography>
                     )}
                   </TableCell>
                 </TableRow>
               ))}
-
+          
               {receipts.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={4} align="center">
+                  <TableCell colSpan={5} align="center">
                     Sin recepciones
                   </TableCell>
                 </TableRow>
@@ -587,25 +668,6 @@ export default function PurchaseOrdersPage() {
             </>
           )}
           
-          {newItem.itemType === 'DEVICE' && (
-            <TextField
-              select
-              label="Modelo de dispositivo"
-              fullWidth
-              margin="normal"
-              value={newItem.deviceModelId}
-              onChange={(e) =>
-                setNewItem({ ...newItem, deviceModelId: e.target.value })
-              }
-            >
-              {models.map((model) => (
-                <MenuItem key={model.id} value={model.id}>
-                  {model.brand} {model.model}
-                </MenuItem>
-              ))}
-            </TextField>
-          )}
-
           {newItem.itemType === 'CONSUMABLE' && (
             <TextField
               select
@@ -852,6 +914,23 @@ export default function PurchaseOrdersPage() {
             disabled={!devicesExcelFile}
           >
             Importar Excel
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={openDelete} onClose={() => setOpenDelete(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>Eliminar orden de compra</DialogTitle>
+        <DialogContent>
+          <Typography>
+            ¿Confirmás que querés eliminar la orden{' '}
+            <strong>{selectedOrder?.number}</strong>?
+            No se puede eliminar si tiene ítems, recepciones o dispositivos asociados.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenDelete(false)}>Cancelar</Button>
+          <Button variant="contained" color="error" onClick={handleDeleteOrder}>
+            Eliminar
           </Button>
         </DialogActions>
       </Dialog>

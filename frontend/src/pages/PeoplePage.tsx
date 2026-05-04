@@ -7,6 +7,7 @@ import {
 import { api } from '../api/axios';
 import AppLayout from '../components/AppLayout';
 import { getUser } from '../auth/auth.storage';
+import * as XLSX from 'xlsx';
 
 type Person = {
   id: number;
@@ -140,15 +141,37 @@ export default function PeoplePage() {
     setOpenCreate(false);
   }
 
+  function exportToExcel() {
+    const rows = people.map((person) => ({
+      Nombre: person.fullName,
+      CUIL: person.employeeId,
+      Email: person.email || '-',
+      Dependencia: person.department?.name || '-',
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(rows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Personas');
+    XLSX.writeFile(
+      workbook,
+      `personas_${new Date().toLocaleDateString('es-AR').replace(/\//g, '-')}.xlsx`,
+    );
+  }
+
   return (
     <AppLayout>
       <Typography variant="h4" sx={{ mb: 3 }}>Personas</Typography>
 
-      {canEdit && (
-        <Button variant="contained" sx={{ mb: 2 }} onClick={() => setOpenCreate(true)}>
-          Nueva persona
+      <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
+        {canEdit && (
+          <Button variant="contained" onClick={() => setOpenCreate(true)}>
+            Nueva persona
+          </Button>
+        )}
+        <Button variant="outlined" onClick={exportToExcel} disabled={people.length === 0}>
+          Exportar a Excel
         </Button>
-      )}
+      </Box>
 
       <Box sx={{ display: 'flex', gap: 2, mb: 3 }}>
         <TextField

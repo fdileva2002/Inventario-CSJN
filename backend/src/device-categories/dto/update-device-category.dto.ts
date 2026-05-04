@@ -8,4 +8,8 @@ export class UpdateDeviceCategoryDto {
   @IsOptional()
   @IsString()
   description?: string;
+
+  @IsOptional()
+  @IsString()
+  code?: string;
 }

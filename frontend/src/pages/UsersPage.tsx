@@ -34,8 +34,11 @@ export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [openCreate, setOpenCreate] = useState(false);
   const [openResetConfirm, setOpenResetConfirm] = useState(false);
+  const [openChangeRole, setOpenChangeRole] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [resetMessage, setResetMessage] = useState('');
+  const [newRole, setNewRole] = useState('');
+  const [roleError, setRoleError] = useState('');
 
   const [newUser, setNewUser] = useState({
     name: '',
@@ -44,6 +47,7 @@ export default function UsersPage() {
     role: 'CONSULTA',
   });
   const [createError, setCreateError] = useState('');
+  
 
   async function loadUsers() {
     const response = await api.get('/users');
@@ -91,6 +95,26 @@ export default function UsersPage() {
     setOpenResetConfirm(true);
   }
 
+  function openRoleModal(user: User) {
+    setSelectedUser(user);
+    setNewRole(user.role);
+    setRoleError('');
+    setOpenChangeRole(true);
+  }
+
+  async function handleChangeRole() {
+    if (!selectedUser) return;
+    setRoleError('');
+    try {
+      await api.patch(`/users/${selectedUser.id}`, { role: newRole });
+      setOpenChangeRole(false);
+      setSelectedUser(null);
+      loadUsers();
+    } catch (error: any) {
+      setRoleError(error?.response?.data?.message || 'Error al cambiar rol');
+    }
+  }
+
   return (
     <AppLayout>
       <Typography variant="h4" sx={{ mb: 3 }}>
@@ -117,7 +141,13 @@ export default function UsersPage() {
               <TableRow key={user.id}>
                 <TableCell>{user.name}</TableCell>
                 <TableCell>{user.email}</TableCell>
-                <TableCell>{user.role}</TableCell>
+                <TableCell>
+                  <Chip
+                    label={user.role === 'EDICION' ? 'Edición' : 'Consulta'}
+                    color={user.role === 'EDICION' ? 'primary' : 'default'}
+                    size="small"
+                  />
+                </TableCell>
                 <TableCell>
                   <Chip
                     label={user.active ? 'Activo' : 'Inactivo'}
@@ -126,9 +156,16 @@ export default function UsersPage() {
                   />
                 </TableCell>
                 <TableCell>
-                  <Box sx={{ display: 'flex', gap: 1 }}>
+                  <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
                     {user.id !== currentUser?.id && (
                       <>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          onClick={() => openRoleModal(user)}
+                        >
+                          Cambiar rol
+                        </Button>
                         <Button
                           size="small"
                           variant="outlined"
@@ -147,6 +184,11 @@ export default function UsersPage() {
                         </Button>
                       </>
                     )}
+                    {user.id === currentUser?.id && (
+                      <Typography variant="caption" color="text.secondary">
+                        (vos)
+                      </Typography>
+                    )}
                   </Box>
                 </TableCell>
               </TableRow>
@@ -155,6 +197,7 @@ export default function UsersPage() {
         </Table>
       </Paper>
 
+      {/* Modal nuevo usuario */}
       <Dialog open={openCreate} onClose={() => setOpenCreate(false)} maxWidth="xs" fullWidth>
         <DialogTitle>Nuevo usuario</DialogTitle>
         <DialogContent>
@@ -191,7 +234,6 @@ export default function UsersPage() {
             <MenuItem value="EDICION">Edición</MenuItem>
             <MenuItem value="CONSULTA">Consulta</MenuItem>
           </TextField>
-
           {createError && (
             <Typography color="error" variant="body2" sx={{ mt: 1 }}>
               {createError}
@@ -210,15 +252,50 @@ export default function UsersPage() {
         </DialogActions>
       </Dialog>
 
+      {/* Modal cambiar rol */}
+      <Dialog open={openChangeRole} onClose={() => setOpenChangeRole(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>Cambiar rol — {selectedUser?.name}</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Rol actual: <strong>{selectedUser?.role === 'EDICION' ? 'Edición' : 'Consulta'}</strong>
+          </Typography>
+          <TextField
+            select
+            label="Nuevo rol"
+            fullWidth
+            margin="normal"
+            value={newRole}
+            onChange={(e) => setNewRole(e.target.value)}
+          >
+            <MenuItem value="EDICION">Edición — puede crear, editar y eliminar</MenuItem>
+            <MenuItem value="CONSULTA">Consulta — solo puede ver</MenuItem>
+          </TextField>
+          {roleError && (
+            <Typography color="error" variant="body2" sx={{ mt: 1 }}>
+              {roleError}
+            </Typography>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenChangeRole(false)}>Cancelar</Button>
+          <Button
+            variant="contained"
+            onClick={handleChangeRole}
+            disabled={newRole === selectedUser?.role}
+          >
+            Guardar
+          </Button>
+        </DialogActions>
+      </Dialog>
 
+      {/* Modal blanquear contraseña */}
       <Dialog open={openResetConfirm} onClose={() => setOpenResetConfirm(false)} maxWidth="xs" fullWidth>
         <DialogTitle>Blanquear contraseña</DialogTitle>
         <DialogContent>
           {!resetMessage ? (
             <Typography>
               ¿Confirmás que querés blanquear la contraseña de{' '}
-              <strong>{selectedUser?.name}</strong>? Se asignará una contraseña
-              temporal.
+              <strong>{selectedUser?.name}</strong>? Se asignará una contraseña temporal.
             </Typography>
           ) : (
             <Typography color="success.main">{resetMessage}</Typography>

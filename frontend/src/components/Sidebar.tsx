@@ -26,6 +26,7 @@ const menuItems = [
   { label: 'Órdenes de compra', path: '/purchase-orders' },
   { label: 'Proveedores', path: '/suppliers' },
   { label: 'Categorías', path: '/device-categories' },
+  { label: 'Dependencias', path: '/departments' },
 ];
 
 export default function Sidebar() {

@@ -208,7 +208,33 @@ export class DevicesService {
          where.category = {
           name: filters.categoryName,
          }; 
-  };  
+  };
+  
+  if (filters.assignedTo) {
+    where.assignments = {
+      some: {
+        returnedAt: null,
+        OR: [
+          {
+            person: {
+              fullName: {
+                contains: filters.assignedTo,
+                mode: 'insensitive',
+              },
+            },
+          },
+          {
+            department: {
+              name: {
+                contains: filters.assignedTo,
+                mode: 'insensitive',
+              },
+            },
+          },
+        ],
+      },
+    };
+  }
 
   return this.prisma.device.findMany({
     where,
@@ -224,6 +250,7 @@ export class DevicesService {
         },
         include: {
           person: true,
+          department: true,
         },
       },
     },

@@ -12,105 +12,117 @@ export class AssignmentsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(createAssignmentDto: CreateAssignmentDto) {
-    const { deviceId, personId, notes } = createAssignmentDto;
-
+    const { deviceId, personId, departmentId, notes } = createAssignmentDto;
+    
+    if (!personId && !departmentId) {
+      throw new BadRequestException(
+        'Debe indicar una persona o una dependencia para asignar el dispositivo',
+      );
+    }
+  
+    if (personId && departmentId) {
+      throw new BadRequestException(
+        'No se puede asignar a una persona y una dependencia al mismo tiempo',
+      );
+    }
+  
     const device = await this.prisma.device.findUnique({
       where: { id: deviceId },
-      include: {
-        status: true,
-      },
+      include: { status: true },
     });
-
+  
     if (!device) {
       throw new NotFoundException('Dispositivo no encontrado');
     }
-
-    const person = await this.prisma.person.findUnique({
-      where: { id: personId },
-    });
-
-    if (!person) {
-      throw new NotFoundException('Persona no encontrada');
+  
+    if (personId) {
+      const person = await this.prisma.person.findUnique({
+        where: { id: personId },
+      });
+      if (!person) {
+        throw new NotFoundException('Persona no encontrada');
+      }
     }
-
+  
+    if (departmentId) {
+      const department = await this.prisma.department.findUnique({
+        where: { id: departmentId },
+      });
+      if (!department) {
+        throw new NotFoundException('Dependencia no encontrada');
+      }
+    }
+  
     const availableStatus = await this.prisma.deviceStatus.findUnique({
       where: { code: 'DISPONIBLE' },
     });
-
+  
     if (!availableStatus) {
-      throw new NotFoundException(
-        'No existe el estado DISPONIBLE en la base de datos',
-      );
+      throw new NotFoundException('No existe el estado DISPONIBLE');
     }
-
+  
     if (device.statusId !== availableStatus.id) {
       throw new BadRequestException(
         'Solo se pueden asignar dispositivos en estado DISPONIBLE',
       );
     }
-
+  
     const activeAssignment = await this.prisma.deviceAssignment.findFirst({
-      where: {
-        deviceId,
-        returnedAt: null,
-      },
+      where: { deviceId, returnedAt: null },
     });
-
+  
     if (activeAssignment) {
       throw new BadRequestException(
         'El dispositivo ya está asignado y no fue devuelto',
       );
     }
-
+  
     const inUseStatus = await this.prisma.deviceStatus.findUnique({
       where: { code: 'EN_FUNCIONAMIENTO' },
     });
-
+  
     if (!inUseStatus) {
-      throw new NotFoundException(
-        'No existe el estado EN_FUNCIONAMIENTO en la base de datos',
-      );
+      throw new NotFoundException('No existe el estado EN_FUNCIONAMIENTO');
     }
-
+  
     const assignment = await this.prisma.deviceAssignment.create({
-  data: {
-    deviceId,
-    personId,
-    assignedAt: new Date(),
-    status: 'ACTIVA',
-    notes,
-  },
-  include: {
-    device: true,
-    person: true,
-  },
-});
-
-    await this.prisma.device.update({
-      where: { id: deviceId },
       data: {
-        statusId: inUseStatus.id,
+        deviceId,
+        personId: personId ?? null,
+        departmentId: departmentId ?? null,
+        assignedAt: new Date(),
+        status: 'ACTIVA',
+        notes,
+      },
+      include: {
+        device: true,
+        person: true,
       },
     });
-
+  
     if (createAssignmentDto.location) {
       await this.prisma.device.update({
         where: { id: deviceId },
         data: { location: createAssignmentDto.location },
       });
     }
-
+  
+    await this.prisma.device.update({
+      where: { id: deviceId },
+      data: { statusId: inUseStatus.id },
+    });
+  
     await this.prisma.deviceMovement.create({
       data: {
         deviceId,
         type: 'ASIGNACION',
         previousStatus: device.status.code,
         newStatus: inUseStatus.code,
-        personId,
-        detail: notes ?? 'Asignación de dispositivo',
+        personId: personId ?? null,
+        detail: notes ?? (personId ? 'Asignación a persona' : 'Asignación a dependencia'),
       },
     });
-
+  
     return this.prisma.deviceAssignment.findUnique({
       where: { id: assignment.id },
       include: {
@@ -124,6 +136,7 @@ export class AssignmentsService {
           },
         },
         person: true,
+        department: true,
       },
     });
   }

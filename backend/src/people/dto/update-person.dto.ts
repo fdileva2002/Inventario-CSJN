@@ -1,4 +1,5 @@
-import { IsBoolean, IsEmail, IsOptional, IsString } from 'class-validator';
+import { IsEmail, IsInt, IsNotEmpty, IsOptional, IsString, IsNumber, IsBoolean } from 'class-validator';
+import { Type } from 'class-transformer';
 
 export class UpdatePersonDto {
   @IsOptional()
@@ -26,7 +27,8 @@ export class UpdatePersonDto {
   phone?: string;
 
   @IsOptional()
-  @IsString()
+  @Type(() => Number)
+  @IsInt()
   departmentId?: number;
 
   @IsOptional()

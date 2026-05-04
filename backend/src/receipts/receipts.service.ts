@@ -67,11 +67,34 @@ export class ReceiptsService {
       }
     }
 
-    return this.prisma.receipt.findMany({
+    const receipts = await this.prisma.receipt.findMany({
       where: purchaseOrderId ? { purchaseOrderId } : undefined,
       include: this.getInclude(),
       orderBy: [{ receivedAt: 'desc' }, { id: 'desc' }],
     });
+
+    return Promise.all(
+      receipts.map(async (receipt) => {
+        const devicesCreated = await this.prisma.deviceMovement.count({
+          where: {
+            type: 'INGRESO_POR_COMPRA',
+            receiptId: receipt.id,
+          },
+        });
+
+        const totalDevicesExpected = receipt.items
+          .filter((item) => item.purchaseOrderItem.itemType === 'DEVICE')
+          .reduce((acc, item) => acc + item.receivedQuantity, 0);
+
+        return {
+          ...receipt,
+          devicesCreated,
+          totalDevicesExpected,
+          devicesFullyLoaded:
+            totalDevicesExpected > 0 && devicesCreated >= totalDevicesExpected,
+        };
+      }),
+    );
   }
 
   async findOne(id: number) {
@@ -594,7 +617,8 @@ export class ReceiptsService {
             type: 'INGRESO_POR_COMPRA',
             previousStatus: null,
             newStatus: statusToConfigure.code,
-            detail: `Ingreso por recepción ${receipt.id}`,
+            detail: `Ingreso por OC ${receipt.purchaseOrder.number}${receipt.receiptNumber ? ` - Recepción ${receipt.receiptNumber}` : ''}`,
+            receiptId: receipt.id,
           },
         });
 

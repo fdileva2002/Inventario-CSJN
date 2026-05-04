@@ -4,8 +4,13 @@ export class CreateAssignmentDto {
   @IsInt()
   deviceId!: number;
 
+  @IsOptional()
   @IsInt()
-  personId!: number;
+  personId?: number;
+
+  @IsOptional()
+  @IsInt()
+  departmentId?: number;
 
   @IsOptional()
   @IsString()

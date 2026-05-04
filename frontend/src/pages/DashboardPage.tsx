@@ -10,6 +10,7 @@ import {  Box,
         } from '@mui/material';
 import { api } from '../api/axios';
 import AppLayout from '../components/AppLayout';
+import { getUser } from '../auth/auth.storage';
 
 type DashboardDeviceAlert = {
   id: number;
@@ -56,6 +57,8 @@ type DashboardSummary = {
   }[];
 };
 
+const user = getUser();
+
 export default function DashboardPage() {
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   
@@ -68,9 +71,19 @@ export default function DashboardPage() {
 
   return (
     <AppLayout>
-      <Typography variant="h4" sx={{ mb: 3 }}>
-        Dashboard
-      </Typography>
+      <Box sx={{ mb: 3 }}>
+        <Typography variant="h4">
+          Bienvenido, {user?.name}
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          {new Date().toLocaleDateString('es-AR', {
+            weekday: 'long',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+          })}
+        </Typography>
+      </Box>
 
       {!summary ? (
         <Typography>Cargando...</Typography>

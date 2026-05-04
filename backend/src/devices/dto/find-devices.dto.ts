@@ -38,4 +38,8 @@ export class FindDevicesDto {
   @IsOptional()
   @IsString()
   categoryName?: string;
+
+  @IsOptional()
+  @IsString()
+  assignedTo?: string;
 }

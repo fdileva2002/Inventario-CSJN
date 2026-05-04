@@ -21,6 +21,7 @@ import {
 import { api } from '../api/axios';
 import AppLayout from '../components/AppLayout';
 import { getUser } from '../auth/auth.storage';
+import * as XLSX from 'xlsx';
 
 type Consumable = {
   id: number;
@@ -254,17 +255,46 @@ export default function ConsumablesPage() {
       alert(error?.response?.data?.message || 'Error al eliminar consumible');
     }
   }
+
+  function exportToExcel() {
+    const rows = consumables.map((consumable) => ({
+      Nombre: consumable.name,
+      Marca: consumable.brand || '-',
+      Modelo: consumable.model,
+      Variante: consumable.variant || '-',
+      'Stock actual': consumable.stock?.currentStock ?? 0,
+      'Stock mínimo': consumable.minimumStock,
+      Unidad: consumable.unitMeasure || '-',
+      'Estado stock':
+        (consumable.stock?.currentStock ?? 0) <= consumable.minimumStock
+          ? 'Stock bajo'
+          : 'Stock OK',
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(rows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Consumibles');
+    XLSX.writeFile(
+      workbook,
+      `consumibles_${new Date().toLocaleDateString('es-AR').replace(/\//g, '-')}.xlsx`,
+    );
+  }
   return (
     <AppLayout>
       <Typography variant="h4" sx={{ mb: 3 }}>
         Consumibles
       </Typography>
 
-        {canEdit && (
-          <Button variant="contained" sx={{ mb: 2 }} onClick={() => setOpenCreate(true)}>
-            Nuevo consumible
+        <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
+          {canEdit && (
+            <Button variant="contained" onClick={() => setOpenCreate(true)}>
+              Nuevo consumible
+            </Button>
+          )}
+          <Button variant="outlined" onClick={exportToExcel} disabled={consumables.length === 0}>
+            Exportar a Excel
           </Button>
-        )}
+        </Box>
 
       <Paper sx={{ p: 2, mb: 3 }}>
         <Typography variant="h6" sx={{ mb: 2 }}>

@@ -44,30 +44,67 @@ export default function DeviceCategoriesPage() {
   const [categories, setCategories] = useState<DeviceCategory[]>([]);
   const [expandedId, setExpandedId] = useState<number | null>(null);
 
-  // Modal crear categoría
+
   const [openCreateCategory, setOpenCreateCategory] = useState(false);
   const [newCategory, setNewCategory] = useState({ name: '', code: '' });
   const [categoryError, setCategoryError] = useState('');
 
-  // Modal crear modelo
+
   const [openCreateModel, setOpenCreateModel] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState<DeviceCategory | null>(null);
   const [newModel, setNewModel] = useState({ brand: '', model: '' });
   const [modelError, setModelError] = useState('');
 
-  // Modal confirmar eliminar modelo
+
   const [openDeleteModel, setOpenDeleteModel] = useState(false);
   const [selectedModel, setSelectedModel] = useState<DeviceModel | null>(null);
 
+  const [openEditCategory, setOpenEditCategory] = useState(false);
+  const [openDeleteCategory, setOpenDeleteCategory] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState<DeviceCategory | null>(null);
+  const [editCategoryForm, setEditCategoryForm] = useState({ name: '', code: '' });
+  const [editCategoryError, setEditCategoryError] = useState('');
+
+  function openEditModal(category: DeviceCategory) {
+    setSelectedCategory(category);
+    setEditCategoryForm({ name: category.name, code: category.code ?? '' });
+    setEditCategoryError('');
+    setOpenEditCategory(true);
+  }
+
+  async function handleEditCategory() {
+    if (!selectedCategory) return;
+    setEditCategoryError('');
+    try {
+      await api.patch(`/device-categories/${selectedCategory.id}`, {
+        name: editCategoryForm.name,
+        code: editCategoryForm.code || undefined,
+      });
+      setOpenEditCategory(false);
+      loadCategories();
+    } catch (error: any) {
+      setEditCategoryError(error?.response?.data?.message || 'Error al editar categoría');
+    }
+  }
+
+  async function handleDeleteCategory() {
+    if (!selectedCategory) return;
+    try {
+      await api.delete(`/device-categories/${selectedCategory.id}`);
+      setOpenDeleteCategory(false);
+      setSelectedCategory(null);
+      loadCategories();
+    } catch (error: any) {
+      alert(error?.response?.data?.message || 'Error al eliminar categoría');
+    }
+  }
+
   async function loadCategories() {
     const response = await api.get('/device-categories');
-    // Para cada categoría cargamos sus modelos
     const categoriesWithModels = await Promise.all(
       response.data.map(async (cat: DeviceCategory) => {
         const modelsResponse = await api.get('/device-models', {
           params: { search: cat.name },
         });
-        // Filtramos solo los modelos de esta categoría exacta
         const models = modelsResponse.data.filter(
           (m: any) => m.category?.id === cat.id,
         );
@@ -85,7 +122,7 @@ export default function DeviceCategoriesPage() {
     setExpandedId(expandedId === id ? null : id);
   }
 
-  // --- Categoría ---
+
   function resetCategoryModal() {
     setNewCategory({ name: '', code: '' });
     setCategoryError('');
@@ -106,7 +143,6 @@ export default function DeviceCategoriesPage() {
     }
   }
 
-  // --- Modelo ---
   function openModelModal(category: DeviceCategory) {
     setSelectedCategory(category);
     setNewModel({ brand: '', model: '' });
@@ -149,7 +185,7 @@ export default function DeviceCategoriesPage() {
     }
   }
 
-  // Prefijo de tag por categoría
+ 
   const tagPrefixes: Record<string, string> = {
     Desktop: 'PC',
     Notebook: 'NBK',
@@ -212,7 +248,7 @@ export default function DeviceCategoriesPage() {
                   </TableCell>
                   <TableCell>
                     <Chip
-                      label={tagPrefixes[category.name] ?? 'DEV'}
+                      label={category.code ?? tagPrefixes[category.name] ?? 'DEV'}
                       size="small"
                       color="primary"
                       variant="outlined"
@@ -223,16 +259,41 @@ export default function DeviceCategoriesPage() {
                   </TableCell>
                   {canEdit && (
                     <TableCell>
-                      <Button
-                        size="small"
-                        variant="outlined"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openModelModal(category);
-                        }}
-                      >
-                        + Modelo
-                      </Button>
+                      <Box sx={{ display: 'flex', gap: 1 }}>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openModelModal(category);
+                          }}
+                        >
+                          + Modelo
+                        </Button>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          color="info"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openEditModal(category);
+                          }}
+                        >
+                          Editar
+                        </Button>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          color="error"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedCategory(category);
+                            setOpenDeleteCategory(true);
+                          }}
+                        >
+                          Eliminar
+                        </Button>
+                      </Box>
                     </TableCell>
                   )}
                 </TableRow>
@@ -398,6 +459,61 @@ export default function DeviceCategoriesPage() {
         <DialogActions>
           <Button onClick={() => setOpenDeleteModel(false)}>Cancelar</Button>
           <Button variant="contained" color="error" onClick={handleDeleteModel}>
+            Eliminar
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={openEditCategory} onClose={() => setOpenEditCategory(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>Editar categoría</DialogTitle>
+        <DialogContent>
+          <TextField
+            label="Nombre"
+            fullWidth
+            margin="normal"
+            value={editCategoryForm.name}
+            onChange={(e) => setEditCategoryForm({ ...editCategoryForm, name: e.target.value })}
+          />
+          <TextField
+            label="Código de tag (ej: NBK, PC)"
+            fullWidth
+            margin="normal"
+            value={editCategoryForm.code}
+            onChange={(e) =>
+              setEditCategoryForm({ ...editCategoryForm, code: e.target.value.toUpperCase() })
+            }
+          />
+          {editCategoryError && (
+            <Typography color="error" variant="body2" sx={{ mt: 1 }}>
+              {editCategoryError}
+            </Typography>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenEditCategory(false)}>Cancelar</Button>
+          <Button
+            variant="contained"
+            onClick={handleEditCategory}
+            disabled={!editCategoryForm.name}
+          >
+            Guardar
+          </Button>
+        </DialogActions>
+      </Dialog>
+        
+
+      <Dialog open={openDeleteCategory} onClose={() => setOpenDeleteCategory(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>Eliminar categoría</DialogTitle>
+        <DialogContent>
+          <Typography>
+            ¿Confirmás que querés eliminar la categoría{' '}
+            <strong>{selectedCategory?.name}</strong>?
+            No se puede eliminar si tiene modelos o dispositivos asociados.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenDeleteCategory(false)}>Cancelar</Button>
+          <Button variant="contained" color="error" onClick={handleDeleteCategory}>
             Eliminar
           </Button>
         </DialogActions>

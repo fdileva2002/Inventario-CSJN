@@ -32,7 +32,8 @@ model Department {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  people    Person[]
+  people      Person[]
+  assignments DeviceAssignment[]
 }
 
 model Person {
@@ -209,7 +210,8 @@ model Device {
 model DeviceAssignment {
   id                 Int        @id @default(autoincrement())
   deviceId           Int
-  personId           Int
+  personId           Int?
+  departmentId       Int?
   assignedAt         DateTime
   returnedAt         DateTime?
   status             AssignmentStatus @default(ACTIVA)
@@ -217,9 +219,10 @@ model DeviceAssignment {
   createdById        Int?
   createdAt          DateTime   @default(now())
 
-  device             Device     @relation(fields: [deviceId], references: [id])
-  person             Person     @relation(fields: [personId], references: [id])
-  createdBy          User?      @relation("AssignmentCreatedBy", fields: [createdById], references: [id])
+  device             Device       @relation(fields: [deviceId], references: [id])
+  person             Person?       @relation(fields: [personId], references: [id])
+  department         Department?  @relation(fields: [departmentId], references: [id])
+  createdBy          User?        @relation("AssignmentCreatedBy", fields: [createdById], references: [id])
 
   @@index([deviceId])
   @@index([personId])
@@ -233,6 +236,7 @@ model DeviceMovement {
   previousStatus     String?
   newStatus          String?
   personId           Int?
+  receiptId          Int?
   detail             String?
   userId             Int?
   date               DateTime   @default(now())
