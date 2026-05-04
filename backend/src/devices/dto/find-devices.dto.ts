@@ -42,4 +42,14 @@ export class FindDevicesDto {
   @IsOptional()
   @IsString()
   assignedTo?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  page?: number;
+  
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  limit?: number;
 }

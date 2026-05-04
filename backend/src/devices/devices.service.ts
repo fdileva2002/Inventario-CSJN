@@ -73,192 +73,106 @@ export class DevicesService {
     }
   }
 
-  async findAll(filters: FindDevicesDto) {
-  const where: any = {};
+ async findAll(filters: FindDevicesDto) {
+    const where: any = {};
 
-  if (filters.search) {
-    where.OR = [
-      {
-        tag: {
-          contains: filters.search,
-          mode: 'insensitive',
-        },
-      },
-      {
-        serialNumber: {
-          contains: filters.search,
-          mode: 'insensitive',
-        },
-      },
-      {
-        hostname: {
-          contains: filters.search,
-          mode: 'insensitive'
-        }
-      },
-      {
-        location: {
-          contains: filters.search,
-          mode: 'insensitive',
-        },
-      },
-      {
-        model: {
-          model: {
-            contains: filters.search,
-            mode: 'insensitive',
-          },
-        },
-      },
-      {
-        model: {
-          brand: {
-            contains: filters.search,
-            mode: 'insensitive',
-          },
-        },
-      },
-      {
-        category: {
-          name: {
-            contains: filters.search,
-            mode: 'insensitive',
-          },
-        },
-      },
-      {
-        status: {
-          name: {
-            contains: filters.search,
-            mode: 'insensitive',
-          },
-        },
-      },
-
-      // Buscar por persona asignada
-      {
-        assignments: {
-          some: {
-            returnedAt: null,
-            person: {
-              fullName: {
-                contains: filters.search,
-                mode: 'insensitive',
-              },
+    if (filters.search) {
+      where.OR = [
+        { tag: { contains: filters.search, mode: 'insensitive' } },
+        { serialNumber: { contains: filters.search, mode: 'insensitive' } },
+        { hostname: { contains: filters.search, mode: 'insensitive' } },
+        { location: { contains: filters.search, mode: 'insensitive' } },
+        { model: { model: { contains: filters.search, mode: 'insensitive' } } },
+        { model: { brand: { contains: filters.search, mode: 'insensitive' } } },
+        { category: { name: { contains: filters.search, mode: 'insensitive' } } },
+        { status: { name: { contains: filters.search, mode: 'insensitive' } } },
+        {
+          assignments: {
+            some: {
+              returnedAt: null,
+              person: { fullName: { contains: filters.search, mode: 'insensitive' } },
             },
           },
         },
-      },
-      {
-        assignments: {
-          some: {
-            returnedAt: null,
-            person: {
-              employeeId: {
-                contains: filters.search,
-                mode: 'insensitive',
-              },
+        {
+          assignments: {
+            some: {
+              returnedAt: null,
+              person: { employeeId: { contains: filters.search, mode: 'insensitive' } },
             },
           },
         },
-      },
-    
-    ];
-  }
+      ];
+    }
 
-  if (filters.statusId !== undefined) {
-    where.statusId = filters.statusId;
-  }
+    if (filters.statusId !== undefined) where.statusId = filters.statusId;
+    if (filters.categoryId !== undefined) where.categoryId = filters.categoryId;
+    if (filters.modelId !== undefined) where.modelId = filters.modelId;
+    if (filters.purchaseOrderId !== undefined) where.purchaseOrderId = filters.purchaseOrderId;
 
-  if (filters.categoryId !== undefined) {
-    where.categoryId = filters.categoryId;
-  }
+    if (filters.assigned === true) {
+      where.assignments = { some: { returnedAt: null } };
+    }
+    if (filters.assigned === false) {
+      where.assignments = { none: { returnedAt: null } };
+    }
 
-  if (filters.modelId !== undefined) {
-    where.modelId = filters.modelId;
-  }
-
-  if (filters.purchaseOrderId !== undefined) {
-    where.purchaseOrderId = filters.purchaseOrderId;
-  }
-
-  if (filters.assigned === true) {
-    where.assignments = {
-      some: {
-        returnedAt: null,
-      },
-    };
-  }
-
-  if (filters.assigned === false) {
-    where.assignments = {
-      none: {
-        returnedAt: null,
-      },
-    };
-  }
-
-  if (filters.statusCode) {
-         where.status = {
-          code: filters.statusCode,
-         }; 
-  };
+    if (filters.statusCode) {
+      where.status = { code: filters.statusCode };
+    }
 
     if (filters.categoryName) {
-         where.category = {
-          name: filters.categoryName,
-         }; 
-  };
-  
-  if (filters.assignedTo) {
-    where.assignments = {
-      some: {
-        returnedAt: null,
-        OR: [
-          {
-            person: {
-              fullName: {
-                contains: filters.assignedTo,
-                mode: 'insensitive',
-              },
+      where.category = { name: filters.categoryName };
+    }
+
+    if (filters.assignedTo) {
+      where.assignments = {
+        some: {
+          returnedAt: null,
+          OR: [
+            { person: { fullName: { contains: filters.assignedTo, mode: 'insensitive' } } },
+            { department: { name: { contains: filters.assignedTo, mode: 'insensitive' } } },
+          ],
+        },
+      };
+    }
+
+   
+    const page = filters.page ?? 0;
+    const limit = filters.limit ?? 40;
+
+    const [devices, total] = await Promise.all([
+      this.prisma.device.findMany({
+        where,
+        include: {
+          category: true,
+          model: true,
+          status: true,
+          supplier: true,
+          purchaseOrder: true,
+          assignments: {
+            where: { returnedAt: null },
+            include: {
+              person: true,
+              department: true,
             },
           },
-          {
-            department: {
-              name: {
-                contains: filters.assignedTo,
-                mode: 'insensitive',
-              },
-            },
-          },
-        ],
-      },
+        },
+        orderBy: { tag: 'asc' },
+        skip: page * limit,
+        take: limit,
+      }),
+      this.prisma.device.count({ where }),
+    ]);
+
+    return {
+      data: devices,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
     };
   }
-
-  return this.prisma.device.findMany({
-    where,
-    include: {
-      category: true,
-      model: true,
-      status: true,
-      supplier: true,
-      purchaseOrder: true,
-      assignments: {
-        where: {
-          returnedAt: null,
-        },
-        include: {
-          person: true,
-          department: true,
-        },
-      },
-    },
-    orderBy: {
-      tag: 'asc',
-    },
-  });
-}
 
   async findOne(id: number) {
     const device = await this.prisma.device.findUnique({
@@ -278,6 +192,8 @@ export class DevicesService {
 
     return device;
   }
+
+  
 
   async update(id: number, updateDeviceDto: UpdateDeviceDto) {
   const existingDevice = await this.prisma.device.findUnique({

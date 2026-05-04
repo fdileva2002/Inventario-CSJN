@@ -131,23 +131,26 @@ export default function DevicesPage() {
   const [assignmentTarget, setAssignmentTarget] = useState<'person' | 'department'>('person');
   const [modelId, setModelId] = useState('');
   const [page, setPage] = useState(0);
-  const rowsPerPage = 40; // dispositivos por página
+  const rowsPerPage = 40;
   const [assignedSearch, setAssignedSearch] = useState('');
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
 
   async function loadDevices() {
     const params: any = {};
-
     if (search.trim()) params.search = search;
-    if (assignedSearch.trim()) params.search = assignedSearch;
     if (statusCode) params.statusCode = statusCode;
-    if (categoryName) params.categoryName = categoryName; 
-    if (location) params.search = location;
-    if (modelId) params.modelId = Number(modelId);
+    if (categoryName) params.categoryName = categoryName;
     if (assignedTo.trim()) params.assignedTo = assignedTo;
+    if (location.trim()) params.location = location;
+    if (modelId) params.modelId = Number(modelId);
+    params.page = page;
+    params.limit = 20;
 
     const response = await api.get('/devices', { params });
-    setDevices(response.data);
-    setPage(0);
+    setDevices(response.data.data);    // ← antes era response.data
+    setTotal(response.data.total);
+    setTotalPages(response.data.totalPages);
   }
 
   useEffect(() => {
@@ -158,6 +161,10 @@ export default function DevicesPage() {
 
     api.get('/departments').then((res) => setDepartments(res.data));
   }, []);
+
+  useEffect(() => {
+    loadDevices();
+  }, [page]);
 
   function clearFilters() {
     setSearch('');
@@ -571,10 +578,10 @@ export default function DevicesPage() {
         </Table>
         <TablePagination
           component="div"
-          count={devices.length}
+          count={total}
           page={page}
           onPageChange={(_, newPage) => setPage(newPage)}
-          rowsPerPage={rowsPerPage}
+          rowsPerPage={40}
           rowsPerPageOptions={[40]}
           labelDisplayedRows={({ from, to, count }) =>
             `${from}–${to} de ${count}`
