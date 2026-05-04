@@ -1,98 +1,284 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# Inventario TI — CSJN
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+Sistema web de inventario de TI para gestión de dispositivos, consumibles, personas, órdenes de compra y asignaciones.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+---
 
-## Description
+## Stack tecnológico
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+| Capa | Tecnología |
+|---|---|
+| Frontend | React + Vite + TypeScript |
+| UI | Material UI (MUI) |
+| Backend | NestJS + TypeScript |
+| Base de datos | PostgreSQL |
+| ORM | Prisma |
+| Auth | JWT |
 
-## Project setup
+---
 
-```bash
-$ npm install
+## Estructura del proyecto
+
+```
+InventarioSop/
+├── backend/          # NestJS API
+│   ├── prisma/       # Schema y migraciones
+│   └── src/
+│       ├── assignments/
+│       ├── auth/
+│       ├── consumable-assignments/
+│       ├── consumable-movements/
+│       ├── consumables/
+│       ├── dashboard/
+│       ├── departments/
+│       ├── device-categories/
+│       ├── device-models/
+│       ├── devices/
+│       ├── people/
+│       ├── purchase-order-items/
+│       ├── purchase-orders/
+│       ├── receipts/
+│       ├── suppliers/
+│       └── users/
+└── frontend/         # React App
+    └── src/
+        ├── api/
+        ├── auth/
+        ├── components/
+        ├── pages/
+        └── router/
 ```
 
-## Compile and run the project
+---
+
+## Requisitos previos
+
+- Node.js 18+
+- PostgreSQL corriendo localmente
+- Git
+
+---
+
+## Instalación en una nueva computadora
+
+### 1. Clonar el repositorio
 
 ```bash
-# development
-$ npm run start
-
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
+git clone https://github.com/fdileva2002/Inventario-CSJN.git
+cd Inventario-CSJN
 ```
 
-## Run tests
+### 2. Configurar el backend
 
 ```bash
-# unit tests
-$ npm run test
-
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
+cd backend
+npm install
 ```
 
-## Deployment
+Crear el archivo `.env` en la carpeta `backend/`:
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+```env
+DATABASE_URL="postgresql://USUARIO:PASSWORD@localhost:5432/inventario_csjn"
+JWT_SECRET="tu_clave_secreta_jwt"
+```
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+Reemplazá `USUARIO` y `PASSWORD` con los datos de tu PostgreSQL local.
+
+Correr las migraciones y generar el cliente de Prisma:
 
 ```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
+npx prisma migrate dev
+npx prisma generate
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+Cargar datos iniciales (seed):
 
-## Resources
+```bash
+npx prisma db seed
+```
 
-Check out a few resources that may come in handy when working with NestJS:
+Iniciar el servidor:
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+```bash
+npm run start:dev
+```
 
-## Support
+El backend corre en `http://localhost:3000`
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+### 3. Configurar el frontend
 
-## Stay in touch
+```bash
+cd ../frontend
+npm install
+npm run dev
+```
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+El frontend corre en `http://localhost:5173`
 
-## License
+---
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+## Usuario inicial
+
+Después de correr el seed, el usuario administrador es:
+
+| Campo | Valor |
+|---|---|
+| Email | admin@inventario.local |
+| Contraseña | Admin1234! |
+
+---
+
+## Roles de usuario
+
+| Rol | Permisos |
+|---|---|
+| `EDICION` | Ver + crear + editar + eliminar |
+| `CONSULTA` | Solo ver, sin botones de acción |
+
+Los roles se gestionan desde la página **Usuarios** (solo visible para usuarios con rol EDICION).
+
+---
+
+## Módulos implementados (MVP)
+
+### Dispositivos
+- Alta manual con generación automática de tag según categoría (ej: `NBK0001`, `MON0003`)
+- Gestión de estados: A configurar / Disponible / En funcionamiento / En reparación / En baja
+- Asignación a **persona** o **dependencia**
+- Devolución automática a estado "A configurar"
+- Cambio de ubicación al asignar
+- Filtros avanzados: tag, serial, hostname, modelo, categoría, estado, persona/dependencia, ubicación
+- Paginación (20 por página)
+- Historial de movimientos por dispositivo
+- Exportar búsqueda a Excel
+- Chips de color por estado
+
+### Consumibles
+- Stock por cantidad (no por unidad individual)
+- Movimientos: ingreso por compra, salida por consumo, ajuste positivo/negativo
+- Alerta de stock bajo
+- Asignación a personas
+- Exportar a Excel
+
+### Personas
+- Alta, baja lógica y edición
+- Asociación a dependencia mediante dropdown
+- Historial de dispositivos y consumibles asignados
+- Exportar a Excel
+
+### Dependencias
+- ABM completo
+- Asociadas a personas y asignaciones de dispositivos
+
+### Órdenes de compra
+- Cabecera con número, proveedor, fecha y estado (PENDIENTE / PARCIAL / COMPLETA / ANULADA)
+- Ítems de tipo DEVICE o CONSUMABLE
+- Filtro por categoría al agregar ítems de dispositivo
+- Recepciones parciales o totales
+- Estado visual de dispositivos cargados por recepción (ej: "2/5 cargados")
+- Bloqueo de carga duplicada de dispositivos
+- Eliminar órdenes
+
+### Recepciones
+- Creación automática de dispositivos desde recepción
+- Importación desde Excel
+- Incremento automático de stock de consumibles
+- Actualización automática del estado de la OC
+
+### Categorías y modelos
+- Categorías con código de tag personalizado
+- Modelos anidados dentro de cada categoría
+- Generación automática de tags usando el código de la categoría
+- Editar y eliminar categorías
+
+### Proveedores
+- ABM completo con búsqueda
+
+### Usuarios
+- Crear usuarios con rol EDICION o CONSULTA
+- Cambiar rol de cualquier usuario
+- Cambiar contraseña propia (validando contraseña actual)
+- Blanquear contraseña de otros usuarios (asigna contraseña temporal)
+- Activar/desactivar usuarios
+
+### Dashboard
+- Bienvenida con nombre del usuario y fecha actual
+- Resumen: dispositivos a configurar, consumibles con stock bajo, OC pendientes y parciales
+- Alertas detalladas con tablas
+- Últimos movimientos de dispositivos
+
+---
+
+## Reglas de negocio importantes
+
+- Solo se pueden asignar dispositivos en estado **DISPONIBLE**
+- Al asignar, el dispositivo pasa a **EN FUNCIONAMIENTO**
+- Al devolver, el dispositivo pasa automáticamente a **A CONFIGURAR**
+- Un dispositivo EN FUNCIONAMIENTO solo puede ser devuelto, no cambiar de estado directamente
+- Los dispositivos se asignan a una **persona** O a una **dependencia**, no a ambas
+- El stock de consumibles nunca se modifica silenciosamente — todo cambio genera un movimiento
+- Las recepciones pueden ser parciales pero no superar la cantidad pedida en la OC
+- Los tags se generan automáticamente usando el código de la categoría (ej: `MON` → `MON0001`)
+- No se puede eliminar una categoría que tenga modelos o dispositivos asociados
+- No se puede eliminar una dependencia que tenga personas asociadas
+
+---
+
+## Comandos útiles
+
+### Backend
+
+```bash
+# Desarrollo
+npm run start:dev
+
+# Generar cliente Prisma después de cambiar el schema
+npx prisma generate
+
+# Crear nueva migración
+npx prisma migrate dev --name nombre_de_la_migracion
+
+# Ver base de datos en el navegador
+npx prisma studio
+```
+
+### Frontend
+
+```bash
+# Desarrollo
+npm run dev
+
+# Build para producción
+npm run build
+```
+
+### Git
+
+```bash
+# Ver estado
+git status
+
+# Subir cambios
+git add .
+git commit -m "descripción del cambio"
+git push origin main
+
+# Bajar cambios en otra computadora
+git pull origin main
+```
+
+---
+
+## Variables de entorno
+
+### backend/.env
+
+```env
+DATABASE_URL="postgresql://USUARIO:PASSWORD@localhost:5432/inventario_csjn"
+JWT_SECRET="clave_secreta_larga_y_segura"
+```
+
+### frontend
+
+Si necesitás cambiar la URL del backend, modificá `frontend/src/api/axios.ts` con la URL correcta.
+
