@@ -25,7 +25,7 @@ export class PeopleService {
 
   async findAll(filters: FindPeopleDto) {
     const where: any = {};
-
+    
     if (filters.search && filters.search.trim() !== '') {
       where.OR = [
         { fullName: { contains: filters.search, mode: 'insensitive' } },
@@ -33,18 +33,34 @@ export class PeopleService {
         { email: { contains: filters.search, mode: 'insensitive' } },
       ];
     }
-
+  
     if (filters.department && filters.department.trim() !== '') {
       where.department = {
         name: { contains: filters.department, mode: 'insensitive' },
       };
     }
-
-    return this.prisma.person.findMany({
-      where,
-      include: { department: true },
-      orderBy: { fullName: 'asc' },
-    });
+  
+    const page = filters.page ?? 0;
+    const limit = filters.limit ?? 40;
+  
+    const [people, total] = await Promise.all([
+      this.prisma.person.findMany({
+        where,
+        include: { department: true },
+        orderBy: { fullName: 'asc' },
+        skip: page * limit,
+        take: limit,
+      }),
+      this.prisma.person.count({ where }),
+    ]);
+  
+    return {
+      data: people,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
   }
 
   async findOne(id: number) {

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import {
   Box, Button, Dialog, DialogTitle, DialogContent, DialogActions,
   Paper, Table, TableBody, TableCell, TableHead, TableRow,
-  TextField, Typography, MenuItem,
+  TextField, Typography, MenuItem, TablePagination,
 } from '@mui/material';
 import { api } from '../api/axios';
 import AppLayout from '../components/AppLayout';
@@ -14,13 +14,11 @@ type Person = {
   fullName: string;
   employeeId: string;
   email?: string;
+  phone?: string;
   department?: { id: number; name: string } | null;
 };
 
-type Department = {
-  id: number;
-  name: string;
-};
+type Department = { id: number; name: string };
 
 type DeviceAssignment = {
   id: number;
@@ -55,32 +53,39 @@ export default function PeoplePage() {
   const canEdit = user?.role === 'EDICION';
 
   const [people, setPeople] = useState<Person[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(0);
+  const rowsPerPage = 40;
+
   const [departments, setDepartments] = useState<Department[]>([]);
   const [search, setSearch] = useState('');
   const [department, setDepartment] = useState('');
+
   const [openCreate, setOpenCreate] = useState(false);
+  const [openEdit, setOpenEdit] = useState(false);
   const [openDetail, setOpenDetail] = useState(false);
   const [openDelete, setOpenDelete] = useState(false);
   const [selectedPerson, setSelectedPerson] = useState<Person | null>(null);
+
   const [deviceAssignments, setDeviceAssignments] = useState<DeviceAssignment[]>([]);
   const [consumableAssignments, setConsumableAssignments] = useState<ConsumableAssignment[]>([]);
 
   const [newPerson, setNewPerson] = useState({
-    firstName: '',
-    lastName: '',
-    employeeId: '',
-    email: '',
-    phone: '',
-    departmentId: '',
+    firstName: '', lastName: '', employeeId: '', email: '', phone: '', departmentId: '',
+  });
+  const [editPerson, setEditPerson] = useState({
+    firstName: '', lastName: '', employeeId: '', email: '', phone: '', departmentId: '',
   });
   const [createError, setCreateError] = useState('');
+  const [editError, setEditError] = useState('');
 
   async function loadPeople() {
-    const params: any = {};
+    const params: any = { page, limit: rowsPerPage };
     if (search.trim()) params.search = search;
     if (department.trim()) params.department = department;
     const response = await api.get('/people', { params });
-    setPeople(response.data);
+    setPeople(response.data.data);
+    setTotal(response.data.total);
   }
 
   async function loadDepartments() {
@@ -89,9 +94,12 @@ export default function PeoplePage() {
   }
 
   useEffect(() => {
-    loadPeople();
     loadDepartments();
   }, []);
+
+  useEffect(() => {
+    loadPeople();
+  }, [page]);
 
   async function handleCreatePerson() {
     setCreateError('');
@@ -109,6 +117,41 @@ export default function PeoplePage() {
       loadPeople();
     } catch (error: any) {
       setCreateError(error?.response?.data?.message || 'Error al crear persona');
+    }
+  }
+
+  function openEditModal(person: Person) {
+    setSelectedPerson(person);
+    setEditPerson({
+      firstName: person.fullName.split(' ')[0],
+      lastName: person.fullName.split(' ').slice(1).join(' '),
+      employeeId: person.employeeId,
+      email: person.email || '',
+      phone: '',
+      departmentId: person.department?.id ? String(person.department.id) : '',
+    });
+    setEditError('');
+    setOpenEdit(true);
+  }
+
+  async function handleEditPerson() {
+    if (!selectedPerson) return;
+    setEditError('');
+    try {
+      await api.patch(`/people/${selectedPerson.id}`, {
+        firstName: editPerson.firstName,
+        lastName: editPerson.lastName,
+        fullName: `${editPerson.firstName} ${editPerson.lastName}`.trim(),
+        employeeId: editPerson.employeeId,
+        email: editPerson.email || undefined,
+        phone: editPerson.phone || undefined,
+        departmentId: editPerson.departmentId ? Number(editPerson.departmentId) : undefined,
+      });
+      setOpenEdit(false);
+      setSelectedPerson(null);
+      loadPeople();
+    } catch (error: any) {
+      setEditError(error?.response?.data?.message || 'Error al editar persona');
     }
   }
 
@@ -148,14 +191,10 @@ export default function PeoplePage() {
       Email: person.email || '-',
       Dependencia: person.department?.name || '-',
     }));
-
     const worksheet = XLSX.utils.json_to_sheet(rows);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Personas');
-    XLSX.writeFile(
-      workbook,
-      `personas_${new Date().toLocaleDateString('es-AR').replace(/\//g, '-')}.xlsx`,
-    );
+    XLSX.writeFile(workbook, `personas_${new Date().toLocaleDateString('es-AR').replace(/\//g, '-')}.xlsx`);
   }
 
   return (
@@ -180,20 +219,18 @@ export default function PeoplePage() {
           onChange={(e) => setSearch(e.target.value)}
           fullWidth
         />
-        <TextField
-          select
-          label="Dependencia"
-          value={department}
-          onChange={(e) => setDepartment(e.target.value)}
-          fullWidth
+        <TextField select label="Dependencia" value={department}
+          onChange={(e) => setDepartment(e.target.value)} fullWidth
         >
           <MenuItem value="">Todas</MenuItem>
           {departments.map((d) => (
             <MenuItem key={d.id} value={d.name}>{d.name}</MenuItem>
           ))}
         </TextField>
-        <Button variant="contained" onClick={loadPeople}>Buscar</Button>
-        <Button variant="outlined" onClick={() => { setSearch(''); setDepartment(''); }}>
+        <Button variant="contained" onClick={() => { setPage(0); loadPeople(); }}>
+          Buscar
+        </Button>
+        <Button variant="outlined" onClick={() => { setSearch(''); setDepartment(''); setPage(0); }}>
           Limpiar
         </Button>
       </Box>
@@ -223,18 +260,30 @@ export default function PeoplePage() {
                 <TableCell>{person.department?.name || '-'}</TableCell>
                 {canEdit && (
                   <TableCell>
-                    <Button
-                      size="small"
-                      color="error"
-                      variant="outlined"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setSelectedPerson(person);
-                        setOpenDelete(true);
-                      }}
-                    >
-                      Eliminar
-                    </Button>
+                    <Box sx={{ display: 'flex', gap: 1 }}>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openEditModal(person);
+                        }}
+                      >
+                        Editar
+                      </Button>
+                      <Button
+                        size="small"
+                        color="error"
+                        variant="outlined"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedPerson(person);
+                          setOpenDelete(true);
+                        }}
+                      >
+                        Eliminar
+                      </Button>
+                    </Box>
                   </TableCell>
                 )}
               </TableRow>
@@ -248,9 +297,19 @@ export default function PeoplePage() {
             )}
           </TableBody>
         </Table>
+
+        <TablePagination
+          component="div"
+          count={total}
+          page={page}
+          onPageChange={(_, newPage) => setPage(newPage)}
+          rowsPerPage={rowsPerPage}
+          rowsPerPageOptions={[40]}
+          labelDisplayedRows={({ from, to, count }) => `${from}–${to} de ${count}`}
+        />
       </Paper>
 
-      {/* Modal crear persona */}
+      {/* Modal crear */}
       <Dialog open={openCreate} onClose={resetCreateModal} maxWidth="sm" fullWidth>
         <DialogTitle>Nueva persona</DialogTitle>
         <DialogContent>
@@ -283,12 +342,7 @@ export default function PeoplePage() {
               <MenuItem key={d.id} value={d.id}>{d.name}</MenuItem>
             ))}
           </TextField>
-
-          {createError && (
-            <Typography color="error" variant="body2" sx={{ mt: 1 }}>
-              {createError}
-            </Typography>
-          )}
+          {createError && <Typography color="error" variant="body2" sx={{ mt: 1 }}>{createError}</Typography>}
         </DialogContent>
         <DialogActions>
           <Button onClick={resetCreateModal}>Cancelar</Button>
@@ -300,20 +354,62 @@ export default function PeoplePage() {
         </DialogActions>
       </Dialog>
 
-      {/* Modal confirmar eliminar */}
+      {/* Modal editar */}
+      <Dialog open={openEdit} onClose={() => setOpenEdit(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Editar persona</DialogTitle>
+        <DialogContent>
+          <TextField label="Nombre" fullWidth margin="normal"
+            value={editPerson.firstName}
+            onChange={(e) => setEditPerson({ ...editPerson, firstName: e.target.value })}
+          />
+          <TextField label="Apellido" fullWidth margin="normal"
+            value={editPerson.lastName}
+            onChange={(e) => setEditPerson({ ...editPerson, lastName: e.target.value })}
+          />
+          <TextField label="CUIL" fullWidth margin="normal"
+            value={editPerson.employeeId}
+            onChange={(e) => setEditPerson({ ...editPerson, employeeId: e.target.value })}
+          />
+          <TextField label="Email" fullWidth margin="normal"
+            value={editPerson.email}
+            onChange={(e) => setEditPerson({ ...editPerson, email: e.target.value })}
+          />
+          <TextField label="Teléfono" fullWidth margin="normal"
+            value={editPerson.phone}
+            onChange={(e) => setEditPerson({ ...editPerson, phone: e.target.value })}
+          />
+          <TextField select label="Dependencia" fullWidth margin="normal"
+            value={editPerson.departmentId}
+            onChange={(e) => setEditPerson({ ...editPerson, departmentId: e.target.value })}
+          >
+            <MenuItem value="">Sin dependencia</MenuItem>
+            {departments.map((d) => (
+              <MenuItem key={d.id} value={d.id}>{d.name}</MenuItem>
+            ))}
+          </TextField>
+          {editError && <Typography color="error" variant="body2" sx={{ mt: 1 }}>{editError}</Typography>}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenEdit(false)}>Cancelar</Button>
+          <Button variant="contained" onClick={handleEditPerson}
+            disabled={!editPerson.firstName || !editPerson.lastName || !editPerson.employeeId}
+          >
+            Guardar
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Modal eliminar */}
       <Dialog open={openDelete} onClose={() => setOpenDelete(false)} maxWidth="xs" fullWidth>
         <DialogTitle>Eliminar persona</DialogTitle>
         <DialogContent>
           <Typography>
             ¿Confirmás que querés eliminar a <strong>{selectedPerson?.fullName}</strong>?
-            Esta acción no se puede deshacer.
           </Typography>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setOpenDelete(false)}>Cancelar</Button>
-          <Button variant="contained" color="error" onClick={handleDeletePerson}>
-            Eliminar
-          </Button>
+          <Button variant="contained" color="error" onClick={handleDeletePerson}>Eliminar</Button>
         </DialogActions>
       </Dialog>
 

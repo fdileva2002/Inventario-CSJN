@@ -15,6 +15,7 @@ import {
   TableCell,
   TableHead,
   TableRow,
+  TablePagination,
   TextField,
   Typography,
 } from '@mui/material';
@@ -92,26 +93,28 @@ export default function ConsumablesPage() {
     const user = getUser();
     const canEdit = user?.role === 'EDICION';
     const [openDelete, setOpenDelete] = useState(false);
+    const [total, setTotal] = useState(0);
+    const [page, setPage] = useState(0);
+    const rowsPerPage = 40;
 
   async function loadConsumables() {
-    const params: any = {};
-
-    if (search.trim() !== '') {
-      params.search = search;
-    }
-
-    if (belowMinimum) {
-      params.belowMinimum = true;
-    }
-
+    const params: any = { page, limit: rowsPerPage };
+    if (search.trim()) params.search = search;
+    if (belowMinimum) params.belowMinimum = true;
     const response = await api.get('/consumables', { params });
-    setConsumables(response.data);
+    setConsumables(response.data.data);
+    setTotal(response.data.total);
   }
 
   useEffect(() => {
-    loadConsumables();
     loadPeople();
+    loadConsumables();
   }, []);
+
+
+  useEffect(() => {
+    loadConsumables();
+  }, [page]);
 
   function clearFilters() {
     setSearch('');
@@ -178,8 +181,8 @@ export default function ConsumablesPage() {
     }
 
     async function loadPeople() {
-      const response = await api.get('/people');
-      setPeople(response.data);
+      const response = await api.get('/people', { params: { limit: 1000 } });
+      setPeople(response.data.data);
     }
 
     function openAssignModal(consumable: Consumable) {
@@ -415,6 +418,18 @@ export default function ConsumablesPage() {
             )}
           </TableBody>
         </Table>
+
+
+      <TablePagination
+        component="div"
+        count={total}
+        page={page}
+        onPageChange={(_, newPage) => setPage(newPage)}
+        rowsPerPage={rowsPerPage}
+        rowsPerPageOptions={[40]}
+        labelDisplayedRows={({ from, to, count }) => `${from}–${to} de ${count}`}
+      />
+
       </Paper>
             <Dialog
               open={openCreate}

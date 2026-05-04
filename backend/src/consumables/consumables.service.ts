@@ -41,34 +41,35 @@ export class ConsumablesService {
   }
 
   async findAll(filters: FindConsumablesDto) {
-  const where: any = {};
-
-  if (filters.search) {
-    where.OR = [
-      { name: { contains: filters.search, mode: 'insensitive' } },
-      { brand: { contains: filters.search, mode: 'insensitive' } },
-      { model: { contains: filters.search, mode: 'insensitive' } },
-      { variant: { contains: filters.search, mode: 'insensitive' } },
-    ];
-  }
-
-  const consumables = await this.prisma.consumable.findMany({
-    where,
-    include: {
-      stock: true,
-    },
-    orderBy: [{ name: 'asc' }, { model: 'asc' }],
-  });
-
-  if (filters.belowMinimum === true) {
-    return consumables.filter((consumable) => {
-      const currentStock = consumable.stock?.currentStock ?? 0;
-      return currentStock <= consumable.minimumStock;
+    const where: any = { active: true };
+    
+    if (filters.search) {
+      where.OR = [
+        { name: { contains: filters.search, mode: 'insensitive' } },
+        { brand: { contains: filters.search, mode: 'insensitive' } },
+        { model: { contains: filters.search, mode: 'insensitive' } },
+        { variant: { contains: filters.search, mode: 'insensitive' } },
+      ];
+    }
+  
+    const page = filters.page ?? 0;
+    const limit = filters.limit ?? 40;
+  
+    const allConsumables = await this.prisma.consumable.findMany({
+      where,
+      include: { stock: true },
+      orderBy: [{ name: 'asc' }, { model: 'asc' }],
     });
+  
+    const filtered = filters.belowMinimum === true
+      ? allConsumables.filter(c => (c.stock?.currentStock ?? 0) <= c.minimumStock)
+      : allConsumables;
+  
+    const total = filtered.length;
+    const data = filtered.slice(page * limit, page * limit + limit);
+  
+    return { data, total, page, limit, totalPages: Math.ceil(total / limit) };
   }
-
-  return consumables;
- }
 
   async findOne(id: number) {
     const consumable = await this.prisma.consumable.findUnique({
