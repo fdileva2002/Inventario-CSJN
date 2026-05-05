@@ -229,8 +229,8 @@ export default function DevicesPage() {
     }
 
   async function loadPeople() {
-    const response = await api.get('/people');
-    setPeople(response.data);
+    const response = await api.get('/people', { params: { limit: 1000 } });
+    setPeople(response.data.data);
   }
 
   function openManageModal(device: Device) {
@@ -745,18 +745,7 @@ export default function DevicesPage() {
                 </>
               )}
                 
-                <TextField
-                  label="Motivo / observación del cambio"
-                  fullWidth
-                  margin="normal"
-                  value={statusForm.notes}
-                  onChange={(e) =>
-                    setStatusForm({
-                      ...statusForm,
-                      notes: e.target.value,
-                    })
-                  }
-                />
+                
               
             {selectedDevice?.status?.name === 'Disponible' && (
               <>
