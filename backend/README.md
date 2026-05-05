@@ -282,3 +282,14 @@ JWT_SECRET="clave_secreta_larga_y_segura"
 
 Si necesitás cambiar la URL del backend, modificá `frontend/src/api/axios.ts` con la URL correcta.
 
+CAMBIAR AHORA
+
+OC nro/año
+Buscador orden
+linkear ampliacion con OC original
+CAMBIAR NRO DE RECEPCION POR REMITO
+
+
+CAMBIAR MAS ADELANTE
+Traer EXP del SIAF
+
