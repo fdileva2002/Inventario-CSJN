@@ -6,6 +6,7 @@ import {
   IsString,
   IsIn,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 
 export class CreatePurchaseOrderDto {
   @IsString()
@@ -25,4 +26,9 @@ export class CreatePurchaseOrderDto {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  parentOrderId?: number;
 }

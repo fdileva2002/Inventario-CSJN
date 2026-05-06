@@ -28,9 +28,11 @@ export class PurchaseOrdersService {
           date: new Date(createPurchaseOrderDto.date),
           status: createPurchaseOrderDto.status ?? 'PENDIENTE',
           notes: createPurchaseOrderDto.notes,
+          parentOrderId: createPurchaseOrderDto.parentOrderId ?? null,
         },
         include: {
           supplier: true,
+          parentOrder: true,
         },
       });
     } catch (error: any) {
@@ -44,47 +46,36 @@ export class PurchaseOrdersService {
     }
   }
 
-  async findAll(search?: string) {
-  const validStatuses = ['PENDIENTE', 'PARCIAL', 'COMPLETA', 'ANULADA'];
+  async findAll(search?: string, year?: string) {
+    const where: any = {};
+    const validStatuses = ['PENDIENTE', 'PARCIAL', 'COMPLETA', 'ANULADA'];
 
-  return this.prisma.purchaseOrder.findMany({
-    where: search
-      ? {
-          OR: [
-            {
-              number: {
-                contains: search,
-                mode: 'insensitive',
-              },
-            },
-            {
-              supplier: {
-                name: {
-                  contains: search,
-                  mode: 'insensitive',
-                },
-              },
-            },
-            ...(validStatuses.includes(search.toUpperCase())
-              ? [
-                  {
-                    status: {
-                      equals: search.toUpperCase() as any,
-                    },
-                  },
-                ]
-              : []),
-          ],
-        }
-      : undefined,
-    include: {
-      supplier: true,
-    },
-    orderBy: {
-      date: 'desc',
-    },
-  });
-}
+    if (search) {
+      where.OR = [
+        { number: { contains: search, mode: 'insensitive' } },
+        { supplier: { name: { contains: search, mode: 'insensitive' } } },
+        ...(validStatuses.includes(search.toUpperCase())
+          ? [{ status: { equals: search.toUpperCase() as any } }]
+          : []),
+      ];
+    }
+
+    if (year) {
+      where.number = {
+        contains: year,
+        mode: 'insensitive',
+      };
+    }
+
+    return this.prisma.purchaseOrder.findMany({
+      where,
+      include: {
+        supplier: true,
+        parentOrder: true, // ← agregar
+      },
+      orderBy: { date: 'desc' },
+    });
+  }
 
   async findOne(id: number) {
     const purchaseOrder = await this.prisma.purchaseOrder.findUnique({

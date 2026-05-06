@@ -3,6 +3,8 @@ import {
   Box,
   Button,
   Chip,
+  Checkbox,
+  FormControlLabel,
   Paper,
   MenuItem,
   Table,
@@ -27,10 +29,8 @@ type PurchaseOrder = {
   number: string;
   date: string;
   status?: string;
-  supplier?: {
-    id: number;
-    name: string;
-  };
+  supplier?: { id: number; name: string };
+  parentOrder?: { id: number; number: string } | null;
 };
 
 type Supplier = {
@@ -90,9 +90,12 @@ export default function PurchaseOrdersPage() {
   const [openCreate, setOpenCreate] = useState(false);
 
   const [newOrder, setNewOrder] = useState({
-      number: '',
-      supplierId: '',
-    });
+    orderNumber: '',
+    year: String(new Date().getFullYear()),
+    supplierId: '',
+    isAmpliation: false,
+    parentOrderId: '',
+  });
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [openDetail, setOpenDetail] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<PurchaseOrder | null>(null);
@@ -129,6 +132,11 @@ export default function PurchaseOrdersPage() {
 
   const [openDelete, setOpenDelete] = useState(false);
 
+  const [yearFilter, setYearFilter] = useState('');
+  
+  const currentYear = new Date().getFullYear();
+  const years = Array.from({ length: 5 }, (_, i) => String(currentYear - i));
+
   async function handleDeleteOrder() {
     if (!selectedOrder) return;
     try {
@@ -147,7 +155,9 @@ export default function PurchaseOrdersPage() {
   
 
   async function loadOrders() {
-    const response = await api.get('/purchase-orders');
+    const params: any = {};
+    if (yearFilter) params.year = yearFilter;
+    const response = await api.get('/purchase-orders', { params });
     setOrders(response.data);
   }
 
@@ -168,21 +178,28 @@ export default function PurchaseOrdersPage() {
   }, []);
 
   async function handleCreateOrder() {
-      try {
-        await api.post('/purchase-orders', {
-          number: newOrder.number,
-          supplierId: Number(newOrder.supplierId),
-          date: new Date().toISOString(),
-        });
-
-        setOpenCreate(false);
-        setNewOrder({ number: '', supplierId: '' });
-        loadOrders();
-      } catch (error: any) {
-        console.log(error);
-        alert(error?.response?.data?.message || 'Error al crear orden');
-      }
+    try {
+      await api.post('/purchase-orders', {
+        number: `${newOrder.orderNumber.padStart(2, '0')}/${newOrder.year}`,
+        supplierId: Number(newOrder.supplierId),
+        date: new Date().toISOString(),
+        parentOrderId: newOrder.isAmpliation && newOrder.parentOrderId
+          ? Number(newOrder.parentOrderId)
+          : undefined,
+      });
+      setOpenCreate(false);
+      setNewOrder({
+        orderNumber: '',
+        year: String(new Date().getFullYear()),
+        supplierId: '',
+        isAmpliation: false,
+        parentOrderId: '',
+      });
+      loadOrders();
+    } catch (error: any) {
+      alert(error?.response?.data?.message || 'Error al crear orden');
     }
+  }
 
     async function loadSuppliers() {
       const response = await api.get('/suppliers');
@@ -360,6 +377,29 @@ export default function PurchaseOrdersPage() {
         </Button>
       )}
 
+      <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
+        <TextField
+          select
+          label="Filtrar por año"
+          value={yearFilter}
+          onChange={(e) => setYearFilter(e.target.value)}
+          sx={{ minWidth: 150 }}
+        >
+          <MenuItem value="">Todos los años</MenuItem>
+          {years.map((y) => (
+            <MenuItem key={y} value={y}>{y}</MenuItem>
+          ))}
+        </TextField>
+        
+        <Button variant="contained" onClick={loadOrders}>
+          Buscar
+        </Button>
+        
+        <Button variant="outlined" onClick={() => { setYearFilter(''); loadOrders(); }}>
+          Limpiar
+        </Button>
+      </Box>
+
       <Paper sx={{ p: 2 }}>
         <Table>
           <TableHead>
@@ -367,7 +407,8 @@ export default function PurchaseOrdersPage() {
             <TableCell>Número</TableCell>
             <TableCell>Proveedor</TableCell>
             <TableCell>Fecha</TableCell>
-            <TableCell>Estado</TableCell> 
+            <TableCell>Estado</TableCell>
+            <TableCell>Ampliación de</TableCell> 
             {canEdit && <TableCell>Acciones</TableCell>}
           </TableRow>
         </TableHead>
@@ -401,6 +442,12 @@ export default function PurchaseOrdersPage() {
                 />
               </TableCell>
 
+              <TableCell>
+                {order.parentOrder ? (
+                  <Chip label={order.parentOrder.number} size="small" variant="outlined" />
+                ) : '-'}
+              </TableCell>
+
               {canEdit && (
                 <TableCell>
                   <Button
@@ -429,32 +476,81 @@ export default function PurchaseOrdersPage() {
         <DialogTitle>Nueva orden</DialogTitle>
 
         <DialogContent>
-          <TextField
-            label="Número"
-            fullWidth
-            margin="normal"
-            value={newOrder.number}
-            onChange={(e) =>
-              setNewOrder({ ...newOrder, number: e.target.value })
-            }
-          />
-
-          <TextField
-              select
-              label="Proveedor"
+          <Box sx={{ display: 'flex', gap: 2 }}>
+            <TextField
+              label="Número Orden"
               fullWidth
               margin="normal"
-              value={newOrder.supplierId}
+              value={newOrder.orderNumber}
               onChange={(e) =>
-                setNewOrder({ ...newOrder, supplierId: e.target.value })
+                setNewOrder({ ...newOrder, orderNumber: e.target.value })
+              }
+            />
+            <TextField
+              select
+              label="Año"
+              fullWidth
+              margin="normal"
+              value={newOrder.year}
+              onChange={(e) =>
+                setNewOrder({ ...newOrder, year: e.target.value })
               }
             >
-              {suppliers.map((supplier) => (
-                <MenuItem key={supplier.id} value={supplier.id}>
-                  {supplier.name}
+              {years.map((y) => (
+                <MenuItem key={y} value={y}>{y}</MenuItem>
+              ))}
+            </TextField>
+          </Box>
+            
+          <TextField
+            select
+            label="Proveedor"
+            fullWidth
+            margin="normal"
+            value={newOrder.supplierId}
+            onChange={(e) =>
+              setNewOrder({ ...newOrder, supplierId: e.target.value })
+            }
+          >
+            {suppliers.map((supplier) => (
+              <MenuItem key={supplier.id} value={supplier.id}>
+                {supplier.name}
+              </MenuItem>
+            ))}
+          </TextField>
+          
+          <Box sx={{ mt: 1 }}>
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={newOrder.isAmpliation}
+                  onChange={(e) =>
+                    setNewOrder({ ...newOrder, isAmpliation: e.target.checked, parentOrderId: '' })
+                  }
+                />
+              }
+              label="Es ampliación de otra orden"
+            />
+          </Box>
+            
+          {newOrder.isAmpliation && (
+            <TextField
+              select
+              label="Orden original"
+              fullWidth
+              margin="normal"
+              value={newOrder.parentOrderId}
+              onChange={(e) =>
+                setNewOrder({ ...newOrder, parentOrderId: e.target.value })
+              }
+            >
+              {orders.map((order) => (
+                <MenuItem key={order.id} value={order.id}>
+                  {order.number} — {order.supplier?.name}
                 </MenuItem>
               ))}
             </TextField>
+          )}
         </DialogContent>
 
         <DialogActions>
@@ -463,7 +559,7 @@ export default function PurchaseOrdersPage() {
           <Button
             variant="contained"
             onClick={handleCreateOrder}
-            disabled={!newOrder.number || !newOrder.supplierId}
+            disabled={!newOrder.orderNumber || !newOrder.supplierId}
           >
             Crear
           </Button>
@@ -748,84 +844,75 @@ export default function PurchaseOrdersPage() {
         <DialogTitle>Crear recepción</DialogTitle>
 
         <DialogContent>
-          <TextField
-            label="Número de recepción"
-            fullWidth
-            margin="normal"
-            value={newReceipt.receiptNumber}
-            onChange={(e) =>
-              setNewReceipt({ ...newReceipt, receiptNumber: e.target.value })
-            }
-          />
-
-          <TextField
-            label="Fecha de recepción"
-            type="date"
-            fullWidth
-            margin="normal"
-            value={newReceipt.receivedAt}
-            onChange={(e) =>
-              setNewReceipt({ ...newReceipt, receivedAt: e.target.value })
-            }
-            slotProps={{
-              inputLabel: { shrink: true },
-            }}
-          />
-
-          <TextField
-            label="Notas"
-            fullWidth
-            margin="normal"
-            value={newReceipt.notes}
-            onChange={(e) =>
-              setNewReceipt({ ...newReceipt, notes: e.target.value })
-            }
-          />
-
-          <Typography variant="h6" sx={{ mt: 3, mb: 2 }}>
-            Cantidades recibidas
-          </Typography>
-          
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell>Tipo</TableCell>
-                <TableCell>Producto</TableCell>
-                <TableCell>Cantidad comprada</TableCell>
-                <TableCell>Cantidad recibida ahora</TableCell>
-              </TableRow>
-            </TableHead>
-          
-            <TableBody>
-              {items.map((item) => (
-                <TableRow key={item.id}>
-                  <TableCell>{item.itemType}</TableCell>
-                  <TableCell>
-                    {item.itemType === 'DEVICE'
-                      ? `${item.deviceModel?.brand} ${item.deviceModel?.model}`
-                      : `${item.consumable?.name} ${item.consumable?.model}`}
-                  </TableCell>
-                  <TableCell>{item.quantity}</TableCell>
-                  <TableCell>
-                    <TextField
-                      type="number"
-                      size="small"
-                      value={newReceipt.items[item.id] || ''}
-                      onChange={(e) =>
-                        setNewReceipt({
-                          ...newReceipt,
-                          items: {
-                            ...newReceipt.items,
-                            [item.id]: e.target.value,
-                          },
-                        })
-                      }
-                    />
-                  </TableCell>
-                </TableRow>
+          <Box sx={{ display: 'flex', gap: 2 }}>
+            <TextField
+              label="Número"
+              fullWidth
+              margin="normal"
+              value={newOrder.orderNumber}
+              onChange={(e) => setNewOrder({ ...newOrder, orderNumber: e.target.value })}
+              placeholder="01"
+            />
+            <TextField
+              select
+              label="Año"
+              fullWidth
+              margin="normal"
+              value={newOrder.year}
+              onChange={(e) => setNewOrder({ ...newOrder, year: e.target.value })}
+            >
+              {years.map((y) => (
+                <MenuItem key={y} value={y}>{y}</MenuItem>
               ))}
-            </TableBody>
-          </Table>
+            </TextField>
+          </Box>
+            
+          <TextField
+            select
+            label="Proveedor"
+            fullWidth
+            margin="normal"
+            value={newOrder.supplierId}
+            onChange={(e) => setNewOrder({ ...newOrder, supplierId: e.target.value })}
+          >
+            {suppliers.map((supplier) => (
+              <MenuItem key={supplier.id} value={supplier.id}>
+                {supplier.name}
+              </MenuItem>
+            ))}
+          </TextField>
+          
+          {/* Checkbox ampliación */}
+          <Box sx={{ mt: 1, mb: 1 }}>
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={newOrder.isAmpliation}
+                  onChange={(e) =>
+                    setNewOrder({ ...newOrder, isAmpliation: e.target.checked, parentOrderId: '' })
+                  }
+                />
+              }
+              label="Es ampliación de otra orden"
+            />
+          </Box>
+            
+          {newOrder.isAmpliation && (
+            <TextField
+              select
+              label="Orden original"
+              fullWidth
+              margin="normal"
+              value={newOrder.parentOrderId}
+              onChange={(e) => setNewOrder({ ...newOrder, parentOrderId: e.target.value })}
+            >
+              {orders.map((order) => (
+                <MenuItem key={order.id} value={order.id}>
+                  {order.number} — {order.supplier?.name}
+                </MenuItem>
+              ))}
+            </TextField>
+          )}
         </DialogContent>
             
         <DialogActions>
@@ -934,6 +1021,8 @@ export default function PurchaseOrdersPage() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      
     </AppLayout>
   );
 }

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
+  Autocomplete,
   Box,
   Button,
   Checkbox,
@@ -601,22 +602,20 @@ export default function ConsumablesPage() {
                     : ''}
                 </Typography>
                 
-                <TextField
-                  select
-                  label="Persona"
-                  fullWidth
-                  margin="normal"
-                  value={assignForm.personId}
-                  onChange={(e) =>
-                    setAssignForm({ ...assignForm, personId: e.target.value })
+                <Autocomplete
+                  options={people}
+                  getOptionLabel={(person) => `${person.fullName} - ${person.employeeId}`}
+                  value={people.find((p) => p.id === Number(assignForm.personId)) ?? null}
+                  onChange={(_, selected) =>
+                    setAssignForm({ ...assignForm, personId: selected ? String(selected.id) : '' })
                   }
-                >
-                  {people.map((person) => (
-                    <MenuItem key={person.id} value={person.id}>
-                      {person.fullName} - {person.employeeId}
-                    </MenuItem>
-                  ))}
-                </TextField>
+                  renderInput={(params) => (
+                    <TextField {...params} label="Persona" margin="normal" fullWidth />
+                  )}
+                  noOptionsText="No se encontraron personas"
+                  clearOnEscape
+                  sx={{ mt: 1 }}
+                />
               
                 <TextField
                   label="Cantidad"

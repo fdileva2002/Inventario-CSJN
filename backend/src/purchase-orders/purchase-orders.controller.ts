@@ -30,8 +30,11 @@ export class PurchaseOrdersController {
 
   @Roles('EDICION', 'CONSULTA')
   @Get()
-  findAll(@Query('search') search?: string) {
-    return this.purchaseOrdersService.findAll(search);
+  findAll(
+    @Query('search') search?: string,
+    @Query('year') year?: string,
+  ) {
+    return this.purchaseOrdersService.findAll(search, year);
   }
 
   @Roles('EDICION', 'CONSULTA')
@@ -54,4 +57,6 @@ export class PurchaseOrdersController {
   remove(@Param('id', ParseIntPipe) id: number) {
     return this.purchaseOrdersService.remove(id);
   }
+
+  
 }
