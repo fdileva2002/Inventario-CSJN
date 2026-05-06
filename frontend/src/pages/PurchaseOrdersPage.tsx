@@ -846,73 +846,87 @@ export default function PurchaseOrdersPage() {
         <DialogContent>
           <Box sx={{ display: 'flex', gap: 2 }}>
             <TextField
-              label="Número"
-              fullWidth
-              margin="normal"
-              value={newOrder.orderNumber}
-              onChange={(e) => setNewOrder({ ...newOrder, orderNumber: e.target.value })}
-              placeholder="01"
-            />
-            <TextField
-              select
-              label="Año"
-              fullWidth
-              margin="normal"
-              value={newOrder.year}
-              onChange={(e) => setNewOrder({ ...newOrder, year: e.target.value })}
-            >
-              {years.map((y) => (
-                <MenuItem key={y} value={y}>{y}</MenuItem>
-              ))}
-            </TextField>
-          </Box>
-            
-          <TextField
-            select
-            label="Proveedor"
+            label="Número de recepción"
             fullWidth
             margin="normal"
-            value={newOrder.supplierId}
-            onChange={(e) => setNewOrder({ ...newOrder, supplierId: e.target.value })}
-          >
-            {suppliers.map((supplier) => (
-              <MenuItem key={supplier.id} value={supplier.id}>
-                {supplier.name}
-              </MenuItem>
-            ))}
-          </TextField>
-          
-          {/* Checkbox ampliación */}
-          <Box sx={{ mt: 1, mb: 1 }}>
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={newOrder.isAmpliation}
-                  onChange={(e) =>
-                    setNewOrder({ ...newOrder, isAmpliation: e.target.checked, parentOrderId: '' })
-                  }
-                />
-              }
-              label="Es ampliación de otra orden"
+            value={newReceipt.receiptNumber}
+            onChange={(e) =>
+              setNewReceipt({ ...newReceipt, receiptNumber: e.target.value })
+            }
             />
+          
+
+          <TextField
+            label="Fecha de recepción"
+            type="date"
+            fullWidth
+            margin="normal"
+            value={newReceipt.receivedAt}
+            onChange={(e) =>
+              setNewReceipt({ ...newReceipt, receivedAt: e.target.value })
+            }
+            slotProps={{
+              inputLabel: { shrink: true },
+            }}
+          />
+
+          <TextField
+            label="Notas"
+	          fullWidth
+            margin="normal"
+            value={newReceipt.notes}
+            onChange={(e) =>
+              setNewReceipt({ ...newReceipt, notes: e.target.value })
+            }
+          />
+
+          
           </Box>
-            
-          {newOrder.isAmpliation && (
-            <TextField
-              select
-              label="Orden original"
-              fullWidth
-              margin="normal"
-              value={newOrder.parentOrderId}
-              onChange={(e) => setNewOrder({ ...newOrder, parentOrderId: e.target.value })}
-            >
-              {orders.map((order) => (
-                <MenuItem key={order.id} value={order.id}>
-                  {order.number} — {order.supplier?.name}
-                </MenuItem>
-              ))}
-            </TextField>
-          )}
+
+          <Typography variant="h6" sx={{ mt: 3, mb: 2 }}>
+            Cantidades recibidas
+          </Typography>
+          
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell>Tipo</TableCell>
+                <TableCell>Producto</TableCell>
+                <TableCell>Cantidad comprada</TableCell>
+                <TableCell>Cantidad recibida ahora</TableCell>
+              </TableRow>
+            </TableHead>
+
+	            <TableBody>
+                {items.map((item) => (
+                  <TableRow key={item.id}>
+                    <TableCell>{item.itemType}</TableCell>
+                    <TableCell>
+                      {item.itemType === 'DEVICE'
+                        ? `${item.deviceModel?.brand} ${item.deviceModel?.model}`
+                        : `${item.consumable?.name} ${item.consumable?.model}`}
+                    </TableCell>
+                    <TableCell>{item.quantity}</TableCell>
+                    <TableCell>
+                      <TextField
+                        type="number"
+                        size="small"
+                        value={newReceipt.items[item.id] || ''}
+                        onChange={(e) =>
+                          setNewReceipt({
+                            ...newReceipt,
+                            items: {
+                              ...newReceipt.items,
+                              [item.id]: e.target.value,
+                            },
+                          })
+                        }
+                      />
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+          </Table>
         </DialogContent>
             
         <DialogActions>
