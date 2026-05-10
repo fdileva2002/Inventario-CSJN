@@ -43,6 +43,10 @@ export class ConsumablesService {
   async findAll(filters: FindConsumablesDto) {
     const where: any = { active: true };
     
+    if (filters.type) {
+      where.type = filters.type;
+    }
+    
     if (filters.search) {
       where.OR = [
         { name: { contains: filters.search, mode: 'insensitive' } },

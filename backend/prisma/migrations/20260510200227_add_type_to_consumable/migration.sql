@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "Consumable" ADD COLUMN     "type" TEXT NOT NULL DEFAULT 'CARTUCHO';

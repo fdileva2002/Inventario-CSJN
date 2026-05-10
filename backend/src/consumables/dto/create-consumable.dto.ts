@@ -31,4 +31,8 @@ export class CreateConsumableDto {
   @IsOptional()
   @IsString()
   unitMeasure?: string;
+
+  @IsOptional()
+  @IsString()
+  type?: string;
 }

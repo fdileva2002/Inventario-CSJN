@@ -83,6 +83,7 @@ export default function ConsumablesPage() {
 
     const [assignForm, setAssignForm] = useState({
       personId: '',
+      departmentId: '',
       quantity: '',
       detail: '',
     });
@@ -97,6 +98,13 @@ export default function ConsumablesPage() {
     const [total, setTotal] = useState(0);
     const [page, setPage] = useState(0);
     const rowsPerPage = 40;
+    const [personSearch, setPersonSearch] = useState('');
+    const [filteredPeople, setFilteredPeople] = useState<Person[]>([]);
+    const [selectedPersonAssign, setSelectedPersonAssign] = useState<Person | null>(null);
+    const [assignTarget, setAssignTarget] = useState<'person' | 'department'>('person');
+    const [departments, setDepartments] = useState<{id: number, name: string}[]>([]);
+    
+    
 
   async function loadConsumables() {
     const params: any = { page, limit: rowsPerPage };
@@ -110,6 +118,7 @@ export default function ConsumablesPage() {
   useEffect(() => {
     loadPeople();
     loadConsumables();
+    api.get('/departments').then(res => setDepartments(res.data));
   }, []);
 
 
@@ -190,6 +199,7 @@ export default function ConsumablesPage() {
       setSelectedConsumableAssign(consumable);
       setAssignForm({
         personId: '',
+        departmentId: '',
         quantity: '',
         detail: '',
       });
@@ -211,6 +221,7 @@ export default function ConsumablesPage() {
         setSelectedConsumableAssign(null);
         setAssignForm({
           personId: '',
+          departmentId: '',
           quantity: '',
           detail: '',
         });
@@ -282,6 +293,17 @@ export default function ConsumablesPage() {
       workbook,
       `consumibles_${new Date().toLocaleDateString('es-AR').replace(/\//g, '-')}.xlsx`,
     );
+  }
+
+  async function searchPeople(query: string) {
+    if (!query.trim()) {
+      setFilteredPeople([]);
+      return;
+    }
+    const response = await api.get('/people', {
+      params: { search: query, limit: 20 },
+    });
+    setFilteredPeople(response.data.data);
   }
   return (
     <AppLayout>
@@ -602,20 +624,81 @@ export default function ConsumablesPage() {
                     : ''}
                 </Typography>
                 
-                <Autocomplete
-                  options={people}
-                  getOptionLabel={(person) => `${person.fullName} - ${person.employeeId}`}
-                  value={people.find((p) => p.id === Number(assignForm.personId)) ?? null}
-                  onChange={(_, selected) =>
-                    setAssignForm({ ...assignForm, personId: selected ? String(selected.id) : '' })
-                  }
-                  renderInput={(params) => (
-                    <TextField {...params} label="Persona" margin="normal" fullWidth />
-                  )}
-                  noOptionsText="No se encontraron personas"
-                  clearOnEscape
-                  sx={{ mt: 1 }}
-                />
+                <TextField
+                  select
+                  label="Asignar a"
+                  fullWidth
+                  margin="normal"
+                  value={assignTarget}
+                  onChange={(e) => {
+                    setAssignTarget(e.target.value as 'person' | 'department');
+                    setSelectedPersonAssign(null);
+                    setPersonSearch('');
+                  }}
+                >
+                  <MenuItem value="person">Persona</MenuItem>
+                  <MenuItem value="department">Dependencia</MenuItem>
+                </TextField>
+                
+                {assignTarget === 'person' ? (
+                   <Autocomplete
+                      options={filteredPeople}
+                      getOptionLabel={(option) =>
+                        `${option.fullName} (${option.employeeId})`
+                      }
+                      value={selectedPersonAssign}
+                      onChange={(_, newValue) => {
+                        setSelectedPersonAssign(newValue);
+                        setAssignForm({        
+                          ...assignForm,       
+                          personId: newValue ? String(newValue.id) : '',
+                        });
+                      }}
+                      onInputChange={(_, value) => {
+                        setPersonSearch(value);
+                        searchPeople(value);
+                      }}
+                      inputValue={personSearch}
+                      renderInput={(params) => (
+                        <TextField
+                          {...params}
+                          label="Buscar persona"
+                          fullWidth
+                          margin="normal"
+                          placeholder="Escribí nombre o CUIL..."
+                        />
+                      )}
+                      noOptionsText={
+                        personSearch.length < 2
+                          ? 'Escribí al menos 2 caracteres'
+                          : 'Sin resultados'
+                      }
+                      fullWidth
+                    />
+                ) : (
+                  <Autocomplete
+                    options={departments}
+                    getOptionLabel={(option) => option.name}
+                    onChange={(_, newValue) => {
+                      setAssignForm({
+                        ...assignForm,
+                        departmentId: newValue ? String(newValue.id) : '',
+                      });
+                    }}
+                    renderInput={(params) => (
+                      <TextField
+                        {...params}
+                        label="Buscar dependencia"
+                        fullWidth
+                        margin="normal"
+                        placeholder="Escribí el nombre..."
+                      />
+                    )}
+                    noOptionsText="Sin resultados"
+                    fullWidth
+                  />
+                )
+                }
               
                 <TextField
                   label="Cantidad"
@@ -647,7 +730,10 @@ export default function ConsumablesPage() {
                 <Button
                   variant="contained"
                   onClick={handleAssignConsumable}
-                  disabled={!assignForm.personId || !assignForm.quantity}
+                  disabled={
+                    (assignTarget === 'person' ? !assignForm.personId : !assignForm.departmentId) ||
+                    !assignForm.quantity
+                  }
                 >
                   Asignar
                 </Button>

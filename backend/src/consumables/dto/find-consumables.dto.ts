@@ -20,4 +20,8 @@ export class FindConsumablesDto {
   @Type(() => Number)
   @IsInt()
   limit?: number;
+
+  @IsOptional()
+  @IsString()
+  type?: string;
 }

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
+  Autocomplete,
   Box,
   Button,
   Chip,
@@ -135,6 +136,9 @@ export default function DevicesPage() {
   const [assignedSearch, setAssignedSearch] = useState('');
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
+  const [personSearch, setPersonSearch] = useState('');
+  const [filteredPeople, setFilteredPeople] = useState<Person[]>([]);
+  const [selectedPerson, setSelectedPerson] = useState<Person | null>(null);
 
   async function loadDevices() {
     const params: any = {};
@@ -370,6 +374,26 @@ export default function DevicesPage() {
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Dispositivos');
     XLSX.writeFile(workbook, `dispositivos_${new Date().toLocaleDateString('es-AR').replace(/\//g, '-')}.xlsx`);
+  }
+
+  async function searchPeople(query: string) {
+    if (!query.trim()) {
+      setFilteredPeople([]);
+      return;
+    }
+    const response = await api.get('/people', {
+      params: { search: query, limit: 20 },
+    });
+    setFilteredPeople(response.data.data);
+  }
+
+  function resetManageModal() {
+    setSelectedPerson(null);
+    setPersonSearch('');
+    setFilteredPeople([]);
+    setAssignmentForm({ personId: '', departmentId: '', notes: '', location: '' });
+    setAssignmentTarget('person');
+    setOpenManage(false);
   }
 
   return (
@@ -696,7 +720,7 @@ export default function DevicesPage() {
 
         <Dialog
           open={openManage}
-          onClose={() => setOpenManage(false)}
+          onClose={resetManageModal}
           maxWidth="sm"
           fullWidth
         >
@@ -782,39 +806,62 @@ export default function DevicesPage() {
                 </TextField>
                 
                 {assignmentTarget === 'person' ? (
-                  <TextField
-                    select
-                    label="Persona"
-                    fullWidth
-                    margin="normal"
-                    value={assignmentForm.personId}
-                    onChange={(e) =>
-                      setAssignmentForm({ ...assignmentForm, personId: e.target.value })
+                  <Autocomplete
+                    options={filteredPeople}
+                    getOptionLabel={(option) =>
+                      `${option.fullName} (${option.employeeId})`
                     }
-                  >
-                    {people.map((person) => (
-                      <MenuItem key={person.id} value={person.id}>
-                        {person.fullName} {person.employeeId ? `(${person.employeeId})` : ''}
-                      </MenuItem>
-                    ))}
-                  </TextField>
+                    value={selectedPerson}
+                    onChange={(_, newValue) => {
+                      setSelectedPerson(newValue);
+                      setAssignmentForm({
+                        ...assignmentForm,
+                        personId: newValue ? String(newValue.id) : '',
+                      });
+                    }}
+                    onInputChange={(_, value) => {
+                      setPersonSearch(value);
+                      searchPeople(value);
+                    }}
+                    inputValue={personSearch}
+                    renderInput={(params) => (
+                      <TextField
+                        {...params}
+                        label="Buscar persona"
+                        fullWidth
+                        margin="normal"
+                        placeholder="Escribí nombre o CUIL..."
+                      />
+                    )}
+                    noOptionsText={
+                      personSearch.length < 2
+                        ? 'Escribí al menos 2 caracteres'
+                        : 'Sin resultados'
+                    }
+                    fullWidth
+                  />
                 ) : (
-                  <TextField
-                    select
-                    label="Dependencia"
+                  <Autocomplete
+                    options={departments}
+                    getOptionLabel={(option) => option.name}
+                    onChange={(_, newValue) => {
+                      setAssignmentForm({
+                        ...assignmentForm,
+                        departmentId: newValue ? String(newValue.id) : '',
+                      });
+                    }}
+                    renderInput={(params) => (
+                      <TextField
+                        {...params}
+                        label="Buscar dependencia"
+                        fullWidth
+                        margin="normal"
+                        placeholder="Escribí el nombre..."
+                      />
+                    )}
+                    noOptionsText="Sin resultados"
                     fullWidth
-                    margin="normal"
-                    value={assignmentForm.departmentId ?? ''}
-                    onChange={(e) =>
-                      setAssignmentForm({ ...assignmentForm, departmentId: e.target.value })
-                    }
-                  >
-                    {departments.map((dept) => (
-                      <MenuItem key={dept.id} value={dept.id}>
-                        {dept.name}
-                      </MenuItem>
-                    ))}
-                  </TextField>
+                  />
                 )}
 
                 <TextField
@@ -843,11 +890,12 @@ export default function DevicesPage() {
                 />
               </>
             )} 
+
           </DialogContent>
           
           
           <DialogActions>
-            <Button onClick={() => setOpenManage(false)}>Cerrar</Button>
+            <Button onClick={resetManageModal}>Cerrar</Button>
 
             {(selectedDevice?.assignments?.length ?? 0) > 0 && (
               <Button

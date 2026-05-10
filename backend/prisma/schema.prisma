@@ -258,6 +258,7 @@ model Consumable {
   brand              String?
   model              String
   variant            String?
+  type               String     @default("CARTUCHO")
   minimumStock       Int        @default(0)
   unitMeasure        String?
   active             Boolean    @default(true)

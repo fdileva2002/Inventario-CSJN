@@ -846,7 +846,7 @@ export default function PurchaseOrdersPage() {
         <DialogContent>
           <Box sx={{ display: 'flex', gap: 2 }}>
             <TextField
-            label="Número de recepción"
+            label="Número de remito"
             fullWidth
             margin="normal"
             value={newReceipt.receiptNumber}
