@@ -284,12 +284,10 @@ Si necesitás cambiar la URL del backend, modificá `frontend/src/api/axios.ts` 
 
 CAMBIAR AHORA
 
-OC nro/año
-Buscador orden
-linkear ampliacion con OC original
-CAMBIAR NRO DE RECEPCION POR REMITO
+ERROR CUANDO TRATO DE CARGAR ITEM "CONSUMIBLE"
+ERROR CUANDO TRATO DE ASIGNAR CONSUMIBLE A DEPENDENCIA
 
 
 CAMBIAR MAS ADELANTE
-Traer EXP del SIAF
+Traer EXP del SIAF 
 
