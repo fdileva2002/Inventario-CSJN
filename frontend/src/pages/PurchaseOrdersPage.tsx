@@ -212,8 +212,8 @@ export default function PurchaseOrdersPage() {
     }
 
     async function loadConsumables() {
-      const response = await api.get('/consumables');
-      setConsumables(response.data);
+      const response = await api.get('/consumables', { params: { limit: 1000 } });
+      setConsumables(response.data.data);
     }
 
     async function openOrderDetail(order: PurchaseOrder) {

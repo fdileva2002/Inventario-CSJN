@@ -3,13 +3,14 @@ import LoginPage from '../pages/LoginPage';
 import DashboardPage from '../pages/DashboardPage';
 import DevicesPage from '../pages/DevicesPage';
 import ProtectedRoute from '../components/ProtectedRoute';
-import ConsumablesPage from '../pages/ConsumablesPage';
 import PeoplePage from '../pages/PeoplePage';
 import PurchaseOrdersPage from '../pages/PurchaseOrdersPage';
 import SuppliersPage from '../pages/SuppliersPage';
 import DeviceCategoriesPage from '../pages/DeviceCategoriesPage';
 import UsersPage from '../pages/UsersPage';
 import DepartmentsPage from '../pages/DepartmentsPage';
+import CartuchosPage from '../pages/CartuchosPage';
+import OtrosConsumiblesPage from '../pages/OtrosConsumiblesPage';
 
 export default function AppRouter() {
   return (
@@ -90,21 +91,13 @@ export default function AppRouter() {
           }
         />
 
+        <Route path="/cartuchos" element={<ProtectedRoute><CartuchosPage /></ProtectedRoute>} />
+        <Route path="/otros-consumibles" element={<ProtectedRoute><OtrosConsumiblesPage /></ProtectedRoute>} />
+
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
 
-        <Route
-          path="/consumables"
-          element={
-            <ProtectedRoute>
-              <ConsumablesPage />
-            </ProtectedRoute>
-          }
-        />
+       
       </Routes>
-      
-      
-
-      
     </BrowserRouter>
   );
 }

@@ -21,7 +21,8 @@ import { getUser, removeToken } from '../auth/auth.storage';
 const menuItems = [
   { label: 'Dashboard', path: '/dashboard' },
   { label: 'Dispositivos', path: '/devices' },
-  { label: 'Consumibles', path: '/consumables' },
+  { label: 'Cartuchos', path: '/cartuchos' },
+  { label: 'Otros insumos', path: '/otros-consumibles' },
   { label: 'Personas', path: '/people' },
   { label: 'Órdenes de compra', path: '/purchase-orders' },
   { label: 'Proveedores', path: '/suppliers' },

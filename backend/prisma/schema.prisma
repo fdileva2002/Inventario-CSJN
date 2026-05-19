@@ -34,6 +34,7 @@ model Department {
 
   people      Person[]
   assignments DeviceAssignment[]
+  consumableAssignments ConsumableAssignment[]
 }
 
 model Person {
@@ -307,7 +308,8 @@ model ConsumableMovement {
 model ConsumableAssignment {
   id                 Int        @id @default(autoincrement())
   consumableId       Int
-  personId           Int
+  personId           Int?
+  departmentId       Int?
   quantity           Int
   assignedAt         DateTime
   notes              String?
@@ -315,10 +317,8 @@ model ConsumableAssignment {
   createdAt          DateTime   @default(now())
 
   consumable         Consumable @relation(fields: [consumableId], references: [id])
-  person             Person     @relation(fields: [personId], references: [id])
-
-  @@index([consumableId])
-  @@index([personId])
+  person             Person?     @relation(fields: [personId], references: [id])
+  department         Department? @relation(fields: [departmentId], references: [id])
 }
 
 model AuditLog {

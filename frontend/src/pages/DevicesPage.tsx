@@ -139,6 +139,8 @@ export default function DevicesPage() {
   const [personSearch, setPersonSearch] = useState('');
   const [filteredPeople, setFilteredPeople] = useState<Person[]>([]);
   const [selectedPerson, setSelectedPerson] = useState<Person | null>(null);
+  const [deptSearch, setDeptSearch] = useState('');
+
 
   async function loadDevices() {
     const params: any = {};
@@ -841,14 +843,15 @@ export default function DevicesPage() {
                     fullWidth
                   />
                 ) : (
-                  <Autocomplete
+                   <Autocomplete
                     options={departments}
-                    getOptionLabel={(option) => option.name}
+                    getOptionLabel={(option) => option?.name ?? ''}
+                    isOptionEqualToValue={(option, value) => option?.id === value?.id}
+                    value={null}
+                    inputValue={deptSearch}
+                    onInputChange={(_, value) => setDeptSearch(value)}
                     onChange={(_, newValue) => {
-                      setAssignmentForm({
-                        ...assignmentForm,
-                        departmentId: newValue ? String(newValue.id) : '',
-                      });
+                      setAssignmentForm({ ...assignmentForm, departmentId: newValue ? String(newValue.id) : '' });
                     }}
                     renderInput={(params) => (
                       <TextField
