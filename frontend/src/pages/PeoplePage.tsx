@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Box, Button, Dialog, DialogTitle, DialogContent, DialogActions,
   Paper, Table, TableBody, TableCell, TableHead, TableRow,
@@ -65,6 +66,7 @@ export default function PeoplePage() {
   const [openDetail, setOpenDetail] = useState(false);
   const [openDelete, setOpenDelete] = useState(false);
   const [selectedPerson, setSelectedPerson] = useState<Person | null>(null);
+  const navigate = useNavigate();
 
   const [deviceAssignments, setDeviceAssignments] = useState<DeviceAssignment[]>([]);
   const [consumableAssignments, setConsumableAssignments] = useState<ConsumableAssignment[]>([]);
@@ -200,7 +202,7 @@ export default function PeoplePage() {
     <AppLayout>
       <Typography variant="h4" sx={{ mb: 3 }}>Personas</Typography>
 
-      <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mb: 2 }}>
         {canEdit && (
           <Button variant="contained" onClick={() => setOpenCreate(true)}>
             Nueva persona
@@ -211,7 +213,7 @@ export default function PeoplePage() {
         </Button>
       </Box>
 
-      <Box sx={{ display: 'flex', gap: 2, mb: 3 }}>
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mb: 3 }}>
         <TextField
           label="Buscar por nombre o CUIL"
           value={search}
@@ -259,7 +261,7 @@ export default function PeoplePage() {
                 <TableCell>{person.department?.name || '-'}</TableCell>
                 {canEdit && (
                   <TableCell>
-                    <Box sx={{ display: 'flex', gap: 1 }}>
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
                       <Button
                         size="small"
                         variant="outlined"
@@ -489,6 +491,9 @@ export default function PeoplePage() {
           </Table>
         </DialogContent>
         <DialogActions>
+          <Button onClick={() => navigate(`/movements?kind=DEVICE&personId=${selectedPerson?.id}`)}>
+            Ver todos los movimientos
+          </Button>
           <Button onClick={() => setOpenDetail(false)}>Cerrar</Button>
         </DialogActions>
       </Dialog>

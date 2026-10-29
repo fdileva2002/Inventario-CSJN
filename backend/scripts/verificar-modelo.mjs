@@ -68,7 +68,7 @@ const tecAssign = await as(tec)('POST', '/assignments', { deviceId: admDevice.da
 check('Técnico puede asignar un equipo', tecAssign.status === 201, String(tecAssign.status));
 check('Técnico puede devolverlo', (await as(tec)('PATCH', `/assignments/${tecAssign.data.id}/return`, {})).status === 200);
 check('Técnico NO puede cambiar el estado', (await as(tec)('PATCH', `/devices/${admDevice.data.id}/status`, { statusCode: 'DISPONIBLE' })).status === 403);
-check('Técnico NO puede editar datos del equipo', (await as(tec)('PATCH', `/devices/${admDevice.data.id}`, { hostname: 'X' })).status === 403);
+check('Técnico NO puede editar la MAC del equipo', (await as(tec)('PATCH', `/devices/${admDevice.data.id}`, { macAddress: runMac('ff') })).status === 403);
 check('Consulta NO puede asignar', (await as(con)('POST', '/assignments', { deviceId: admDevice.data.id, personId: person.id })).status === 403);
 check('Administrador NO puede borrar un equipo', (await as(adm)('DELETE', `/devices/${admDevice.data.id}`)).status === 403);
 

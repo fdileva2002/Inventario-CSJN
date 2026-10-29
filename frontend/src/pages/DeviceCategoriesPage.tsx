@@ -258,7 +258,7 @@ export default function DeviceCategoriesPage() {
                   </TableCell>
                   {canEdit && (
                     <TableCell>
-                      <Box sx={{ display: 'flex', gap: 1 }}>
+                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
                         <Button
                           size="small"
                           variant="outlined"

@@ -1,10 +1,14 @@
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import {
   AppBar,
   Box,
   Button,
+  Drawer,
+  IconButton,
   Toolbar,
   Typography,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import Sidebar from './Sidebar';
@@ -15,8 +19,14 @@ type Props = {
   children: ReactNode;
 };
 
+const SIDEBAR_WIDTH = 260;
+
 export default function AppLayout({ children }: Props) {
   const navigate = useNavigate();
+  const theme = useTheme();
+  // En pantallas grandes el menú queda fijo; en celulares y tablets se abre con el botón.
+  const isDesktop = useMediaQuery(theme.breakpoints.up('lg'));
+  const [menuOpen, setMenuOpen] = useState(false);
 
   // El rol guardado al loguearse puede haber cambiado (o ser un rol que ya no existe):
   // se refresca desde el backend y, si cambió, se recarga para mostrar los permisos vigentes.
@@ -33,11 +43,13 @@ export default function AppLayout({ children }: Props) {
     navigate('/login');
   }
 
-    return (
-      <Box sx={{ display: 'flex', minHeight: '100vh' }}>
+  return (
+    <Box sx={{ display: 'flex', minHeight: '100vh' }}>
+      {isDesktop ? (
         <Box
+          component="nav"
           sx={{
-            width: 260,
+            width: SIDEBAR_WIDTH,
             flexShrink: 0,
             position: 'fixed',
             top: 0,
@@ -49,20 +61,45 @@ export default function AppLayout({ children }: Props) {
         >
           <Sidebar />
         </Box>
-        
-        <Box sx={{ flex: 1, ml: '260px' }}>
-          <AppBar position="sticky" sx={{ top: 0, zIndex: 99 }}>
-            <Toolbar sx={{ display: 'flex', justifyContent: 'space-between' }}>
-              <Typography variant="h6">Inventario Sistemas CSJN</Typography>
-              <Button color="inherit" onClick={handleLogout}>
-                Salir
-              </Button>
-            </Toolbar>
-          </AppBar>
-          <Box sx={{ p: 3 }}>
-            {children}
-          </Box>
+      ) : (
+        <Drawer
+          open={menuOpen}
+          onClose={() => setMenuOpen(false)}
+          ModalProps={{ keepMounted: true }}
+        >
+          <Sidebar onNavigate={() => setMenuOpen(false)} />
+        </Drawer>
+      )}
+
+      <Box sx={{ flex: 1, minWidth: 0, ml: isDesktop ? `${SIDEBAR_WIDTH}px` : 0 }}>
+        <AppBar position="sticky" sx={{ top: 0, zIndex: 99 }}>
+          <Toolbar sx={{ display: 'flex', justifyContent: 'space-between', gap: 1 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
+              {!isDesktop && (
+                <IconButton
+                  color="inherit"
+                  edge="start"
+                  aria-label="Abrir menú"
+                  onClick={() => setMenuOpen(true)}
+                >
+                  <Box component="span" sx={{ fontSize: 26, lineHeight: 1 }}>
+                    ☰
+                  </Box>
+                </IconButton>
+              )}
+              <Typography variant="h6" noWrap>
+                Inventario Sistemas CSJN
+              </Typography>
+            </Box>
+            <Button color="inherit" onClick={handleLogout}>
+              Salir
+            </Button>
+          </Toolbar>
+        </AppBar>
+        <Box sx={{ p: { xs: 2, md: 3 } }}>
+          {children}
         </Box>
       </Box>
-    );
+    </Box>
+  );
 }

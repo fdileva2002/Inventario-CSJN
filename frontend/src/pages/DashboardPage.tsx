@@ -57,9 +57,8 @@ type DashboardSummary = {
   }[];
 };
 
-const user = getUser();
-
 export default function DashboardPage() {
+  const user = getUser();
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   
 
@@ -92,7 +91,7 @@ export default function DashboardPage() {
         <Box
           sx={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(2, 1fr)',
+            gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' },
             gap: 2,
           }}
         >

@@ -9,6 +9,9 @@ type StockMovement = {
   detail?: string;
   purchaseOrderId?: number | null;
   receiptId?: number | null;
+  // Destinatario de una salida por asignación.
+  personId?: number | null;
+  departmentId?: number | null;
   date?: Date;
 };
 
@@ -58,6 +61,8 @@ export async function applyStockMovement(
       detail: movement.detail,
       purchaseOrderId: movement.purchaseOrderId ?? null,
       receiptId: movement.receiptId ?? null,
+      personId: movement.personId ?? null,
+      departmentId: movement.departmentId ?? null,
       date: movement.date,
     },
   });

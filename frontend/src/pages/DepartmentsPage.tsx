@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Button,
   Dialog,
@@ -26,6 +27,7 @@ type Department = {
 
 export default function DepartmentsPage() {
   const { canLoad: canEdit, canDelete } = getPermissions();
+  const navigate = useNavigate();
 
   const [departments, setDepartments] = useState<Department[]>([]);
   const [openCreate, setOpenCreate] = useState(false);
@@ -93,7 +95,7 @@ export default function DepartmentsPage() {
           <TableHead>
             <TableRow>
               <TableCell>Nombre</TableCell>
-              {canDelete && <TableCell>Acciones</TableCell>}
+              <TableCell>Acciones</TableCell>
             </TableRow>
           </TableHead>
 
@@ -101,8 +103,15 @@ export default function DepartmentsPage() {
             {departments.map((dept) => (
               <TableRow key={dept.id}>
                 <TableCell>{dept.name}</TableCell>
-                {canDelete && (
-                  <TableCell>
+                <TableCell>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      sx={{ mr: 1 }}
+                      onClick={() => navigate(`/movements?kind=DEVICE&departmentId=${dept.id}`)}
+                    >
+                      Ver movimientos
+                    </Button>
                     {canDelete && (
                       <Button
                         size="small"
@@ -116,14 +125,13 @@ export default function DepartmentsPage() {
                         Eliminar
                       </Button>
                     )}
-                  </TableCell>
-                )}
+                </TableCell>
               </TableRow>
             ))}
 
             {departments.length === 0 && (
               <TableRow>
-                <TableCell colSpan={canDelete ? 2 : 1} align="center">
+                <TableCell colSpan={2} align="center">
                   No hay dependencias cargadas
                 </TableCell>
               </TableRow>

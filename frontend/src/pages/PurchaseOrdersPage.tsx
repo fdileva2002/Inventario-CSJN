@@ -22,6 +22,19 @@ import {
 import { api } from '../api/axios';
 import { getPermissions } from '../auth/permissions';
 import AppLayout from '../components/AppLayout';
+import {
+  QuickConsumableDialog,
+  QuickDeviceModelDialog,
+  QuickSupplierDialog,
+} from '../components/QuickCreateDialogs';
+
+type OrderRef = { id: number; number: string };
+
+// Nombre, modelo (si no está ya en el nombre, como en los cartuchos) y color o variante.
+const consumableLabel = (c?: { name: string; model: string; variant?: string | null } | null) =>
+  c ? [c.name, c.name.includes(c.model) ? null : c.model, c.variant ? `(${c.variant})` : null].filter(Boolean).join(' ') : '-';
+
+const ITEM_TYPE_LABELS = { DEVICE: 'Dispositivo', CONSUMABLE: 'Consumible' } as const;
 
 
 type PurchaseOrder = {
@@ -30,7 +43,8 @@ type PurchaseOrder = {
   date: string;
   status?: string;
   supplier?: { id: number; name: string };
-  parentOrder?: { id: number; number: string } | null;
+  parentOrder?: OrderRef | null;
+  childOrders?: OrderRef[];
 };
 
 type Supplier = {
@@ -51,6 +65,7 @@ type PurchaseOrderItem = {
   consumable?: {
     name: string;
     model: string;
+    variant?: string | null;
   } | null;
 };
 
@@ -64,6 +79,7 @@ type Consumable = {
   id: number;
   name: string;
   model: string;
+  variant?: string | null;
 };
 
 type Receipt = {
@@ -80,7 +96,7 @@ type Receipt = {
     purchaseOrderItem?: {
       itemType: 'DEVICE' | 'CONSUMABLE';
       deviceModel?: { brand: string; model: string } | null;
-      consumable?: { name: string; model: string } | null;
+      consumable?: { name: string; model: string; variant?: string | null } | null;
     };
   }[];
 };
@@ -130,6 +146,13 @@ export default function PurchaseOrdersPage() {
   const [selectedItemCategoryId, setSelectedItemCategoryId] = useState('');
 
   const [openDelete, setOpenDelete] = useState(false);
+  const [quickCreate, setQuickCreate] = useState<'supplier' | 'model' | 'consumable' | null>(null);
+
+  // Abre el detalle de una orden relacionada (original o ampliación).
+  async function openRelatedOrder(ref: OrderRef) {
+    const response = await api.get(`/purchase-orders/${ref.id}`);
+    openOrderDetail(response.data);
+  }
 
   const [yearFilter, setYearFilter] = useState('');
   
@@ -376,7 +399,7 @@ export default function PurchaseOrdersPage() {
         </Button>
       )}
 
-      <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mb: 2 }}>
         <TextField
           select
           label="Filtrar por año"
@@ -407,7 +430,7 @@ export default function PurchaseOrdersPage() {
             <TableCell>Proveedor</TableCell>
             <TableCell>Fecha</TableCell>
             <TableCell>Estado</TableCell>
-            <TableCell>Ampliación de</TableCell> 
+            <TableCell>Ampliaciones</TableCell>
             {canDelete && <TableCell>Acciones</TableCell>}
           </TableRow>
         </TableHead>
@@ -442,9 +465,7 @@ export default function PurchaseOrdersPage() {
               </TableCell>
 
               <TableCell>
-                {order.parentOrder ? (
-                  <Chip label={order.parentOrder.number} size="small" variant="outlined" />
-                ) : '-'}
+                <OrderRelations order={order} onOpen={openRelatedOrder} />
               </TableCell>
 
               {canDelete && (
@@ -477,7 +498,7 @@ export default function PurchaseOrdersPage() {
         <DialogTitle>Nueva orden</DialogTitle>
 
         <DialogContent>
-          <Box sx={{ display: 'flex', gap: 2 }}>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
             <TextField
               label="Número Orden"
               fullWidth
@@ -519,6 +540,9 @@ export default function PurchaseOrdersPage() {
               </MenuItem>
             ))}
           </TextField>
+          <Button size="small" onClick={() => setQuickCreate('supplier')}>
+            + Nuevo proveedor
+          </Button>
           
           <Box sx={{ mt: 1 }}>
             <FormControlLabel
@@ -573,6 +597,12 @@ export default function PurchaseOrdersPage() {
         </DialogTitle>
 
         <DialogContent>
+          {selectedOrder && (selectedOrder.parentOrder || selectedOrder.childOrders?.length) ? (
+            <Box sx={{ mb: 2 }}>
+              <OrderRelations order={selectedOrder} onOpen={openRelatedOrder} />
+            </Box>
+          ) : null}
+
           <Typography variant="h6" sx={{ mb: 2 }}>
             Ítems de la orden
           </Typography>
@@ -602,11 +632,11 @@ export default function PurchaseOrdersPage() {
             <TableBody>
               {items.map((item) => (
                 <TableRow key={item.id}>
-                  <TableCell>{item.itemType}</TableCell>
+                  <TableCell>{ITEM_TYPE_LABELS[item.itemType]}</TableCell>
                   <TableCell>
                     {item.itemType === 'DEVICE'
                       ? `${item.deviceModel?.brand} ${item.deviceModel?.model}`
-                      : `${item.consumable?.name} ${item.consumable?.model}`}
+                      : consumableLabel(item.consumable)}
                   </TableCell>
                   <TableCell>{item.quantity}</TableCell>
                   <TableCell>{item.unitPrice ?? '-'}</TableCell>
@@ -762,6 +792,11 @@ export default function PurchaseOrdersPage() {
                   </MenuItem>
                 ))}
               </TextField>
+              {canEdit && (
+                <Button size="small" onClick={() => setQuickCreate('model')}>
+                  + Nuevo modelo
+                </Button>
+              )}
             </>
           )}
           
@@ -778,10 +813,15 @@ export default function PurchaseOrdersPage() {
             >
               {consumables.map((consumable) => (
                 <MenuItem key={consumable.id} value={consumable.id}>
-                  {consumable.name} {consumable.model}
+                  {consumableLabel(consumable)}
                 </MenuItem>
               ))}
             </TextField>
+          )}
+          {newItem.itemType === 'CONSUMABLE' && canEdit && (
+            <Button size="small" onClick={() => setQuickCreate('consumable')}>
+              + Nuevo consumible
+            </Button>
           )}
 
           <TextField
@@ -845,7 +885,7 @@ export default function PurchaseOrdersPage() {
         <DialogTitle>Crear recepción</DialogTitle>
 
         <DialogContent>
-          <Box sx={{ display: 'flex', gap: 2 }}>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
             <TextField
             label="Número de remito"
             fullWidth
@@ -901,11 +941,11 @@ export default function PurchaseOrdersPage() {
 	            <TableBody>
                 {items.map((item) => (
                   <TableRow key={item.id}>
-                    <TableCell>{item.itemType}</TableCell>
+                    <TableCell>{ITEM_TYPE_LABELS[item.itemType]}</TableCell>
                     <TableCell>
                       {item.itemType === 'DEVICE'
                         ? `${item.deviceModel?.brand} ${item.deviceModel?.model}`
-                        : `${item.consumable?.name} ${item.consumable?.model}`}
+                        : consumableLabel(item.consumable)}
                     </TableCell>
                     <TableCell>{item.quantity}</TableCell>
                     <TableCell>
@@ -1039,7 +1079,69 @@ export default function PurchaseOrdersPage() {
         </DialogActions>
       </Dialog>
 
-      
+      <QuickSupplierDialog
+        open={quickCreate === 'supplier'}
+        onClose={() => setQuickCreate(null)}
+        onCreated={(supplier) => {
+          setSuppliers((current) => [...current, supplier]);
+          setNewOrder((current) => ({ ...current, supplierId: String(supplier.id) }));
+        }}
+      />
+      <QuickDeviceModelDialog
+        open={quickCreate === 'model'}
+        onClose={() => setQuickCreate(null)}
+        categories={categories}
+        defaultCategoryId={selectedItemCategoryId}
+        onCreated={async (model) => {
+          await loadModels();
+          setNewItem((current) => ({ ...current, deviceModelId: String(model.id) }));
+        }}
+      />
+      <QuickConsumableDialog
+        open={quickCreate === 'consumable'}
+        onClose={() => setQuickCreate(null)}
+        onCreated={(consumable) => {
+          setConsumables((current) => [...current, consumable]);
+          setNewItem((current) => ({ ...current, consumableId: String(consumable.id) }));
+        }}
+      />
     </AppLayout>
+  );
+}
+
+// "Ampliación de X" y "Ampliada por Y"; cada chip abre esa orden.
+function OrderRelations({ order, onOpen }: { order: PurchaseOrder; onOpen: (ref: OrderRef) => void }) {
+  const children = order.childOrders ?? [];
+  const parent = order.parentOrder;
+  if (!parent && children.length === 0) return <>-</>;
+
+  return (
+    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, alignItems: 'center' }}>
+      {parent && (
+        <Chip
+          size="small"
+          variant="outlined"
+          color="primary"
+          label={`Ampliación de ${parent.number}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            onOpen(parent);
+          }}
+        />
+      )}
+      {children.map((child) => (
+        <Chip
+          key={child.id}
+          size="small"
+          variant="outlined"
+          color="secondary"
+          label={`Ampliada por ${child.number}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            onOpen(child);
+          }}
+        />
+      ))}
+    </Box>
   );
 }

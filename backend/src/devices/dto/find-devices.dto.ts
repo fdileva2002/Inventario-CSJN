@@ -1,5 +1,5 @@
 import { Transform, Type } from 'class-transformer';
-import { IsBoolean, IsInt, IsOptional, IsString } from 'class-validator';
+import { IsBoolean, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
 
 export class FindDevicesDto {
   @IsOptional()
@@ -44,6 +44,10 @@ export class FindDevicesDto {
   assignedTo?: string;
 
   @IsOptional()
+  @IsString()
+  location?: string;
+
+  @IsOptional()
   @Type(() => Number)
   @IsInt()
   page?: number;
@@ -51,5 +55,7 @@ export class FindDevicesDto {
   @IsOptional()
   @Type(() => Number)
   @IsInt()
+  @Min(1)
+  @Max(200)
   limit?: number;
 }

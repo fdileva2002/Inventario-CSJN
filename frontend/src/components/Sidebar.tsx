@@ -23,6 +23,7 @@ const menuItems = [
   { label: 'Dashboard', path: '/dashboard' },
   { label: 'Dispositivos', path: '/devices' },
   { label: 'Componentes', path: '/components' },
+  { label: 'Movimientos', path: '/movements' },
   { label: 'Cartuchos', path: '/cartuchos' },
   { label: 'Otros insumos', path: '/otros-consumibles' },
   { label: 'Personas', path: '/people' },
@@ -32,7 +33,12 @@ const menuItems = [
   { label: 'Dependencias', path: '/departments' },
 ];
 
-export default function Sidebar() {
+type Props = {
+  // En celulares el menú es un panel que se cierra al elegir una opción.
+  onNavigate?: () => void;
+};
+
+export default function Sidebar({ onNavigate }: Props) {
   const navigate = useNavigate();
   const location = useLocation();
   const user = getUser();
@@ -95,7 +101,10 @@ export default function Sidebar() {
           <ListItemButton
             key={item.path}
             selected={location.pathname === item.path}
-            onClick={() => navigate(item.path)}
+            onClick={() => {
+              navigate(item.path);
+              onNavigate?.();
+            }}
           >
             <ListItemText primary={item.label} />
           </ListItemButton>
@@ -104,7 +113,13 @@ export default function Sidebar() {
         {canManageUsers && (
           <>
             <Divider sx={{ my: 1 }} />
-            <ListItemButton onClick={() => navigate('/users')}>
+            <ListItemButton
+              selected={location.pathname === '/users'}
+              onClick={() => {
+                navigate('/users');
+                onNavigate?.();
+              }}
+            >
               <ListItemText primary="Usuarios" />
             </ListItemButton>
           </>

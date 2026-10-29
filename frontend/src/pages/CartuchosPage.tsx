@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import {
-  Autocomplete,
   Box,
   Button,
   Checkbox,
@@ -23,6 +22,7 @@ import {
 import { api } from '../api/axios';
 import { getPermissions } from '../auth/permissions';
 import AppLayout from '../components/AppLayout';
+import ConsumableDeliveryDialog from '../components/ConsumableDeliveryDialog';
 import * as XLSX from 'xlsx';
 
 type Consumable = {
@@ -35,12 +35,6 @@ type Consumable = {
   unitMeasure?: string | null;
   active: boolean;
   stock?: { currentStock: number } | null;
-};
-
-type Person = {
-  id: number;
-  fullName: string;
-  employeeId: string;
 };
 
 type ConsumableMovement = {
@@ -78,13 +72,6 @@ export default function CartuchosPage() {
   const [openAssign, setOpenAssign] = useState(false);
   const [selectedConsumableAssign, setSelectedConsumableAssign] = useState<Consumable | null>(null);
 
-  const [assignForm, setAssignForm] = useState({
-    personId: '',
-    departmentId: '',
-    quantity: '',
-    detail: '',
-  });
-
   const [openHistory, setOpenHistory] = useState(false);
   const [selectedConsumableHistory, setSelectedConsumableHistory] = useState<Consumable | null>(null);
   const [movements, setMovements] = useState<ConsumableMovement[]>([]);
@@ -95,13 +82,6 @@ export default function CartuchosPage() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(0);
   const rowsPerPage = 40;
-  const [personSearch, setPersonSearch] = useState('');
-  const [filteredPeople, setFilteredPeople] = useState<Person[]>([]);
-  const [selectedPersonAssign, setSelectedPersonAssign] = useState<Person | null>(null);
-  const [assignTarget, setAssignTarget] = useState<'person' | 'department'>('person');
-  const [departments, setDepartments] = useState<{ id: number; name: string }[]>([]);
-  const [deptSearch, setDeptSearch] = useState('');
-  const [selectedDept, setSelectedDept] = useState<{id: number, name: string} | null>(null);
 
   async function loadConsumables() {
     const params: any = { page, limit: rowsPerPage, type: 'CARTUCHO' };
@@ -114,9 +94,6 @@ export default function CartuchosPage() {
 
   useEffect(() => {
     loadConsumables();
-    api.get('/departments').then((res) => 
-      setDepartments(res.data.filter((d: any) => d.name != null))
-    );
   }, []);
 
   useEffect(() => {
@@ -176,32 +153,9 @@ export default function CartuchosPage() {
     }
   }
 
-  function openAssignModal(consumable: Consumable) {
+  function openAssignModal(consumable: Consumable | null) {
     setSelectedConsumableAssign(consumable);
-    setAssignForm({ personId: '', departmentId: '', quantity: '', detail: '' });
     setOpenAssign(true);
-  }
-
-  async function handleAssignConsumable() {
-    if (!selectedConsumableAssign) return;
-    try {
-      await api.post('/consumable-assignments', {
-        consumableId: selectedConsumableAssign.id,
-        personId: assignTarget === 'person' ? Number(assignForm.personId) : undefined,
-        departmentId: assignTarget === 'department' ? Number(assignForm.departmentId) : undefined,
-        quantity: Number(assignForm.quantity),
-        notes: assignForm.detail,
-      });
-      setOpenAssign(false);
-      setSelectedConsumableAssign(null);
-      setAssignForm({ personId: '', departmentId: '', quantity: '', detail: '' });
-      setSelectedPersonAssign(null);
-      setPersonSearch('');
-      setAssignTarget('person');
-      loadConsumables();
-    } catch (error: any) {
-      alert(error?.response?.data?.message || 'Error al asignar cartucho');
-    }
   }
 
   async function openHistoryModal(consumable: Consumable) {
@@ -223,15 +177,6 @@ export default function CartuchosPage() {
     } catch (error: any) {
       alert(error?.response?.data?.message || 'Error al eliminar cartucho');
     }
-  }
-
-  async function searchPeople(query: string) {
-    if (!query.trim()) {
-      setFilteredPeople([]);
-      return;
-    }
-    const response = await api.get('/people', { params: { search: query, limit: 20 } });
-    setFilteredPeople(response.data.data);
   }
 
   function exportToExcel() {
@@ -256,10 +201,15 @@ export default function CartuchosPage() {
     <AppLayout>
       <Typography variant="h4" sx={{ mb: 3 }}>Cartuchos</Typography>
 
-      <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mb: 2 }}>
         {canEdit && (
           <Button variant="contained" onClick={() => setOpenCreate(true)}>
             Nuevo cartucho
+          </Button>
+        )}
+        {canAssign && (
+          <Button variant="contained" color="secondary" onClick={() => openAssignModal(null)}>
+            Entregar consumibles
           </Button>
         )}
         <Button variant="outlined" onClick={exportToExcel} disabled={consumables.length === 0}>
@@ -269,7 +219,7 @@ export default function CartuchosPage() {
 
       <Paper sx={{ p: 2, mb: 3 }}>
         <Typography variant="h6" sx={{ mb: 2 }}>Filtros</Typography>
-        <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'center' }}>
           <TextField
             label="Buscar por marca, modelo o variante"
             value={search}
@@ -319,7 +269,7 @@ export default function CartuchosPage() {
                   <TableCell>{consumable.minimumStock}</TableCell>
                   <TableCell>{isLowStock ? 'Stock bajo' : 'Stock OK'}</TableCell>
                   <TableCell>
-                    <Box sx={{ display: 'flex', gap: 1 }}>
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
                       {(canAssign || canAdjustStock || canDelete) && (
                         <>
                           {canAdjustStock && (
@@ -476,124 +426,12 @@ export default function CartuchosPage() {
         </DialogActions>
       </Dialog>
 
-      {/* Modal asignar */}
-      <Dialog open={openAssign} onClose={() => setOpenAssign(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Asignar cartucho</DialogTitle>
-        <DialogContent>
-          <Typography sx={{ mb: 2 }}>
-            {selectedConsumableAssign
-              ? `${selectedConsumableAssign.brand || ''} ${selectedConsumableAssign.model} ${selectedConsumableAssign.variant || ''}`
-              : ''}
-          </Typography>
-          <TextField
-            select
-            label="Asignar a"
-            fullWidth
-            margin="normal"
-            value={assignTarget}
-            onChange={(e) => {
-              setAssignTarget(e.target.value as 'person' | 'department');
-              setSelectedPersonAssign(null);
-              setPersonSearch('');
-            }}
-          >
-            <MenuItem value="person">Persona</MenuItem>
-            <MenuItem value="department">Dependencia</MenuItem>
-          </TextField>
-
-          {assignTarget === 'person' ? (
-            <Autocomplete
-              options={filteredPeople}
-              filterOptions={(x) => x}
-              getOptionLabel={(option) => `${option.fullName} (${option.employeeId})`}
-              value={selectedPersonAssign}
-              onChange={(_, newValue) => {
-                setSelectedPersonAssign(newValue);
-                setAssignForm({ ...assignForm, personId: newValue ? String(newValue.id) : '' });
-              }}
-              onInputChange={(_, value) => {
-                setPersonSearch(value);
-                searchPeople(value);
-              }}
-              inputValue={personSearch}
-              renderInput={(params) => (
-                <TextField
-                  {...params}
-                  label="Buscar persona"
-                  fullWidth
-                  margin="normal"
-                  placeholder="Escribí nombre o CUIL..."
-                />
-              )}
-              noOptionsText={personSearch.length < 2 ? 'Escribí al menos 2 caracteres' : 'Sin resultados'}
-              fullWidth
-            />
-          ) : (
-            <Autocomplete
-              options={departments}
-              getOptionLabel={(option) => option?.name ?? ''}
-              isOptionEqualToValue={(option, value) => option?.id === value?.id}
-              value={selectedDept}
-              inputValue={deptSearch}
-              onInputChange={(_, value) => setDeptSearch(value)}
-              onChange={(_, newValue) => {
-                setSelectedDept(newValue);
-                setAssignForm({ ...assignForm, departmentId: newValue ? String(newValue.id) : '' });
-              }}
-              renderInput={(params) => (
-                <TextField
-                  {...params}
-                  label="Buscar dependencia"
-                  fullWidth
-                  margin="normal"
-                  placeholder="Escribí el nombre..."
-                />
-              )}
-              noOptionsText="Sin resultados"
-              fullWidth
-            />
-          )}
-
-          <TextField
-            label="Cantidad"
-            type="number"
-            fullWidth
-            margin="normal"
-            value={assignForm.quantity}
-            onChange={(e) => setAssignForm({ ...assignForm, quantity: e.target.value })}
-          />
-          <TextField
-            label="Motivo / detalle"
-            fullWidth
-            margin="normal"
-            multiline
-            rows={3}
-            value={assignForm.detail}
-            onChange={(e) => setAssignForm({ ...assignForm, detail: e.target.value })}
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => {
-            setOpenAssign(false);
-            setAssignTarget('person');
-            setSelectedPersonAssign(null);
-            setPersonSearch('');
-            setSelectedDept(null);
-          }}>
-            Cancelar
-          </Button>
-          <Button
-            variant="contained"
-            onClick={handleAssignConsumable}
-            disabled={
-              (assignTarget === 'person' ? !assignForm.personId : !assignForm.departmentId) ||
-              !assignForm.quantity
-            }
-          >
-            Asignar
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <ConsumableDeliveryDialog
+        open={openAssign}
+        initial={selectedConsumableAssign}
+        onClose={() => setOpenAssign(false)}
+        onDelivered={loadConsumables}
+      />
 
       {/* Modal historial */}
       <Dialog open={openHistory} onClose={() => setOpenHistory(false)} maxWidth="md" fullWidth>

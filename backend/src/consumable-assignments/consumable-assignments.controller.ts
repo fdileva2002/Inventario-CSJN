@@ -9,6 +9,7 @@ import {
 } from '@nestjs/common';
 import { ConsumableAssignmentsService } from './consumable-assignments.service';
 import { CreateConsumableAssignmentDto } from './dto/create-consumable-assignment.dto';
+import { CreateConsumableAssignmentBatchDto } from './dto/create-consumable-assignment-batch.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
@@ -27,6 +28,13 @@ export class ConsumableAssignmentsController {
     return this.consumableAssignmentsService.create(
       createConsumableAssignmentDto,
     );
+  }
+
+  // Varios consumibles en una sola entrega: se descuentan todos o ninguno.
+  @Roles(...ASIGNACION)
+  @Post('batch')
+  createBatch(@Body() dto: CreateConsumableAssignmentBatchDto) {
+    return this.consumableAssignmentsService.createBatch(dto);
   }
 
   @Roles(...LECTURA)

@@ -91,11 +91,11 @@ const fieldLabels: Record<string, string> = {
   hostname: 'Hostname',
   location: 'Ubicación',
   notes: 'Notas',
-  statusId: 'Estado (id)',
-  modelId: 'Modelo (id)',
-  categoryId: 'Categoría (id)',
-  supplierId: 'Proveedor (id)',
-  purchaseOrderId: 'Orden de compra (id)',
+  statusId: 'Estado',
+  modelId: 'Modelo',
+  categoryId: 'Categoría',
+  supplierId: 'Proveedor',
+  purchaseOrderId: 'Orden de compra',
   purchaseDate: 'Fecha de compra',
   entryDate: 'Fecha de ingreso',
 };
@@ -106,8 +106,13 @@ const actionLabels: Record<AuditEntry['action'], string> = {
   ELIMINACION: 'Eliminación',
 };
 
-function formatValue(value: unknown) {
+// references viene de /audit: { statusId: { "3": "Disponible" } }.
+type References = Record<string, Record<string, string>>;
+
+function formatValue(value: unknown, field: string, references: References) {
   if (value === null || value === undefined || value === '') return '-';
+  const reference = references[field]?.[String(value)];
+  if (reference) return reference;
   if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(value)) {
     return new Date(value).toLocaleDateString();
   }
@@ -134,6 +139,7 @@ export default function DeviceHistory({ deviceId }: { deviceId: number }) {
   const [tab, setTab] = useState(0);
   const [movements, setMovements] = useState<DeviceMovement[]>([]);
   const [changes, setChanges] = useState<AuditEntry[]>([]);
+  const [references, setReferences] = useState<References>({});
   const [installed, setInstalled] = useState<InstalledComponent[]>([]);
   const [componentMovements, setComponentMovements] = useState<ComponentMovement[]>([]);
 
@@ -141,13 +147,17 @@ export default function DeviceHistory({ deviceId }: { deviceId: number }) {
     setTab(0);
     setMovements([]);
     setChanges([]);
+    setReferences({});
     setInstalled([]);
     setComponentMovements([]);
 
     api.get(`/devices/${deviceId}/movements`).then((response) => setMovements(response.data));
     api
       .get('/audit', { params: { entity: 'Device', entityId: deviceId, limit: 200 } })
-      .then((response) => setChanges(response.data.data));
+      .then((response) => {
+        setChanges(response.data.data);
+        setReferences(response.data.references ?? {});
+      });
     api
       .get('/components', { params: { deviceId, limit: 200 } })
       .then((response) => setInstalled(response.data.data));
@@ -240,8 +250,8 @@ export default function DeviceHistory({ deviceId }: { deviceId: number }) {
                     {field ? (
                       <>
                         <TableCell>{fieldLabels[field] ?? field}</TableCell>
-                        <TableCell>{formatValue(entry.previousValues?.[field])}</TableCell>
-                        <TableCell>{formatValue(entry.newValues?.[field])}</TableCell>
+                        <TableCell>{formatValue(entry.previousValues?.[field], field, references)}</TableCell>
+                        <TableCell>{formatValue(entry.newValues?.[field], field, references)}</TableCell>
                       </>
                     ) : (
                       <TableCell colSpan={3}>
