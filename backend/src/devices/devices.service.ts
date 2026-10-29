@@ -8,9 +8,8 @@ import { CreateDeviceDto } from './dto/create-device.dto';
 import { UpdateDeviceDto } from './dto/update-device.dto';
 import { CreateSmartDeviceDto } from './dto/create-smart-device.dto';
 import { FindDevicesDto } from './dto/find-devices.dto';
-import { hostname } from 'os';
-import { contain } from 'supertest/lib/cookies';
 import { ChangeDeviceStatusDto } from './dto/change-devices-status.dto';
+import { DeviceMovementType } from '@prisma/client';
 
 @Injectable()
 export class DevicesService {
@@ -18,7 +17,8 @@ export class DevicesService {
 
   async create(createDeviceDto: CreateDeviceDto) {
     try {
-      const device = await this.prisma.device.create({
+      return await this.prisma.transaction(async (tx) => {
+      const device = await tx.device.create({
         data: {
           tag: createDeviceDto.tag,
           serialNumber: createDeviceDto.serialNumber,
@@ -44,16 +44,18 @@ export class DevicesService {
         },
       });
 
-      await this.prisma.deviceMovement.create({
+      await tx.deviceMovement.create({
         data: {
           deviceId: device.id,
           type: 'ALTA_MANUAL',
           newStatus: device.status.code,
+          newLocation: device.location,
           detail: 'Alta manual del dispositivo',
         },
       });
 
       return device;
+      });
     } catch (error: any) {
       if (error.code === 'P2002') {
         const target = error.meta?.target;
@@ -211,11 +213,23 @@ export class DevicesService {
     throw new NotFoundException(`No se encontró el dispositivo con id ${id}`);
   }
 
+  // El estado solo cambia por asignación, devolución o PATCH /devices/:id/status,
+  // que validan las reglas y dejan el movimiento. statusCode y categoryName
+  // vienen del formulario pero no son columnas.
+  const { statusId, statusCode, categoryName, ...editableFields } = updateDeviceDto;
+
+  if (statusId !== undefined && statusId !== existingDevice.statusId) {
+    throw new BadRequestException(
+      'El estado no se puede modificar desde la edición. Usá "Cambiar estado".',
+    );
+  }
+
   try {
-    const updatedDevice = await this.prisma.device.update({
+    return await this.prisma.transaction(async (tx) => {
+    const updatedDevice = await tx.device.update({
       where: { id },
       data: {
-        ...updateDeviceDto,
+        ...editableFields,
         purchaseDate: updateDeviceDto.purchaseDate
           ? new Date(updateDeviceDto.purchaseDate)
           : undefined,
@@ -236,22 +250,22 @@ export class DevicesService {
       },
     });
 
-    if (
-      updateDeviceDto.statusId !== undefined &&
-      existingDevice.statusId !== updatedDevice.statusId
-    ) {
-      await this.prisma.deviceMovement.create({
+    // El detalle campo por campo queda en la auditoría; en el historial del
+    // equipo se muestra el traslado, que es lo que más se consulta.
+    if ((existingDevice.location ?? '') !== (updatedDevice.location ?? '')) {
+      await tx.deviceMovement.create({
         data: {
           deviceId: updatedDevice.id,
-          type: 'CAMBIO_ESTADO',
-          previousStatus: existingDevice.status.code,
-          newStatus: updatedDevice.status.code,
-          detail: `Cambio de estado de ${existingDevice.status.name} a ${updatedDevice.status.name}`,
+          type: 'ACTUALIZACION',
+          previousLocation: existingDevice.location,
+          newLocation: updatedDevice.location,
+          detail: 'Cambio de ubicación',
         },
       });
     }
 
     return updatedDevice;
+    });
   } catch (error: any) {
     if (error.code === 'P2002') {
       const target = error.meta?.target;
@@ -279,9 +293,11 @@ export class DevicesService {
   await this.findOne(id);
 
   try {
-    return await this.prisma.device.delete({
-      where: { id },
-    });
+    return await this.prisma.transaction((tx) =>
+      tx.device.delete({
+        where: { id },
+      }),
+    );
   } catch (error: any) {
     const message = String(error?.message ?? '');
 
@@ -308,10 +324,10 @@ export class DevicesService {
     },
     include: {
       person: true,
+      department: true,
+      user: { select: { id: true, name: true } },
     },
-    orderBy: {
-      date: 'desc',
-    },
+    orderBy: [{ date: 'desc' }, { id: 'desc' }],
   });
  }
  
@@ -343,7 +359,7 @@ export class DevicesService {
   const prefix = this.getTagPrefixByCategory(model.category.name, model.category.code);
 
   try {
-    const device = await this.prisma.$transaction(async (tx) => {
+    const device = await this.prisma.transaction(async (tx) => {
       const tag = await this.generateNextTag(tx, prefix);
 
       const createdDevice = await tx.device.create({
@@ -372,6 +388,7 @@ export class DevicesService {
           deviceId: createdDevice.id,
           type: 'ALTA_MANUAL',
           newStatus: createdDevice.status.code,
+          newLocation: createdDevice.location,
           detail: notes?.trim() || 'Alta manual inteligente del dispositivo',
         },
       });
@@ -465,32 +482,69 @@ private async generateNextTag(tx: any, prefix: string) {
       return this.findOne(id);
     }
 
-    const updatedDevice = await this.prisma.device.update({
-      where: { id },
-      data: {
-        statusId: newStatus.id,
-      },
-      include: {
-        category: true,
-        model: true,
-        status: true,
-        supplier: true,
-        purchaseOrder: true,
-      },
-    });
+    // Reglas del README: EN_FUNCIONAMIENTO se entra asignando y se sale devolviendo.
+    if (newStatus.code === 'EN_FUNCIONAMIENTO') {
+      throw new BadRequestException(
+        'Para poner un dispositivo en funcionamiento hay que asignarlo',
+      );
+    }
 
-    await this.prisma.deviceMovement.create({
-      data: {
-        deviceId: id,
-        type: 'CAMBIO_ESTADO',
-        previousStatus: device.status.code,
-        newStatus: newStatus.code,
-        detail:
-          dto.notes?.trim() ||
-          `Cambio de estado de ${device.status.name} a ${newStatus.name}`,
-      },
-    });
+    if (device.status.code === 'EN_FUNCIONAMIENTO') {
+      throw new BadRequestException(
+        'Un dispositivo en funcionamiento solo puede devolverse; no se le puede cambiar el estado directamente',
+      );
+    }
 
-    return updatedDevice;
+    const movementTypeByStatus: Record<string, DeviceMovementType> = {
+      EN_REPARACION: 'REPARACION',
+      EN_BAJA: 'BAJA',
+    };
+
+    return this.prisma.transaction(async (tx) => {
+      // Condicionado al estado leído: si otro usuario lo cambió entretanto, se corta.
+      const transition = await tx.device.updateMany({
+        where: { id, statusId: device.statusId },
+        data: { statusId: newStatus.id },
+      });
+
+      if (transition.count !== 1) {
+        throw new BadRequestException(
+          'El estado del dispositivo cambió mientras se procesaba. Actualizá la pantalla y volvé a intentar.',
+        );
+      }
+
+      const activeAssignment = await tx.deviceAssignment.findFirst({
+        where: { deviceId: id, returnedAt: null },
+      });
+
+      if (activeAssignment) {
+        throw new BadRequestException(
+          'El dispositivo tiene una asignación abierta. Primero hay que devolverlo.',
+        );
+      }
+
+      await tx.deviceMovement.create({
+        data: {
+          deviceId: id,
+          type: movementTypeByStatus[newStatus.code] ?? 'CAMBIO_ESTADO',
+          previousStatus: device.status.code,
+          newStatus: newStatus.code,
+          detail:
+            dto.notes?.trim() ||
+            `Cambio de estado de ${device.status.name} a ${newStatus.name}`,
+        },
+      });
+
+      return tx.device.findUniqueOrThrow({
+        where: { id },
+        include: {
+          category: true,
+          model: true,
+          status: true,
+          supplier: true,
+          purchaseOrder: true,
+        },
+      });
+    });
   }
 }

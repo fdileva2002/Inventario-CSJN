@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { getCurrentUserId } from '../common/request-context';
 import { CreatePurchaseOrderDto } from './dto/create-purchase-order.dto';
 import { UpdatePurchaseOrderDto } from './dto/update-purchase-order.dto';
 
@@ -21,7 +22,7 @@ export class PurchaseOrdersService {
     }
 
     try {
-      return await this.prisma.purchaseOrder.create({
+      return await this.prisma.transaction((tx) => tx.purchaseOrder.create({
         data: {
           number: createPurchaseOrderDto.number.trim(),
           supplierId: createPurchaseOrderDto.supplierId,
@@ -29,12 +30,13 @@ export class PurchaseOrdersService {
           status: createPurchaseOrderDto.status ?? 'PENDIENTE',
           notes: createPurchaseOrderDto.notes,
           parentOrderId: createPurchaseOrderDto.parentOrderId ?? null,
+          createdById: getCurrentUserId(),
         },
         include: {
           supplier: true,
           parentOrder: true,
         },
-      });
+      }));
     } catch (error: any) {
       if (error.code === 'P2002') {
         throw new BadRequestException(
@@ -108,7 +110,7 @@ export class PurchaseOrdersService {
     }
 
     try {
-      return await this.prisma.purchaseOrder.update({
+      return await this.prisma.transaction((tx) => tx.purchaseOrder.update({
         where: { id },
         data: {
           ...updatePurchaseOrderDto,
@@ -123,7 +125,7 @@ export class PurchaseOrdersService {
         include: {
           supplier: true,
         },
-      });
+      }));
     } catch (error: any) {
       if (error.code === 'P2002') {
         throw new BadRequestException(
@@ -139,9 +141,9 @@ export class PurchaseOrdersService {
     await this.findOne(id);
 
     try {
-      return await this.prisma.purchaseOrder.delete({
+      return await this.prisma.transaction((tx) => tx.purchaseOrder.delete({
         where: { id },
-      });
+      }));
     } catch (error: any) {
       const message = String(error?.message ?? '');
 

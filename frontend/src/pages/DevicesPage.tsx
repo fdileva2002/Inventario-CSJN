@@ -21,6 +21,7 @@ import {
 } from '@mui/material';
 import { api } from '../api/axios';
 import AppLayout from '../components/AppLayout';
+import DeviceHistory from '../components/DeviceHistory';
 import { getUser } from '../auth/auth.storage';
 import * as XLSX from 'xlsx';
 
@@ -67,18 +68,6 @@ type Person = {
   employeeId: string;
 };
 
-type DeviceMovement = {
-  id: number;
-  type: string;
-  previousStatus?: string | null;
-  newStatus?: string | null;
-  detail?: string | null;
-  date: string;
-  person?: {
-    fullName: string;
-  } | null;
-};
-
 export default function DevicesPage() {
   const user = getUser();
   const canEdit = user?.role === 'EDICION';
@@ -108,7 +97,6 @@ export default function DevicesPage() {
     )
   : models;
 
-  const [people, setPeople] = useState<Person[]>([]);
   const [selectedDevice, setSelectedDevice] = useState<Device | null>(null);
   const [openManage, setOpenManage] = useState(false);
 
@@ -126,16 +114,13 @@ export default function DevicesPage() {
   });
   const [openDetail, setOpenDetail] = useState(false);
   const [detailDevice, setDetailDevice] = useState<Device | null>(null);
-  const [movements, setMovements] = useState<DeviceMovement[]>([]);
   const [openDelete, setOpenDelete] = useState(false);
   const [departments, setDepartments] = useState<{id: number, name: string}[]>([]);
   const [assignmentTarget, setAssignmentTarget] = useState<'person' | 'department'>('person');
   const [modelId, setModelId] = useState('');
   const [page, setPage] = useState(0);
   const rowsPerPage = 40;
-  const [assignedSearch, setAssignedSearch] = useState('');
   const [total, setTotal] = useState(0);
-  const [totalPages, setTotalPages] = useState(0);
   const [personSearch, setPersonSearch] = useState('');
   const [filteredPeople, setFilteredPeople] = useState<Person[]>([]);
   const [selectedPerson, setSelectedPerson] = useState<Person | null>(null);
@@ -156,14 +141,12 @@ export default function DevicesPage() {
     const response = await api.get('/devices', { params });
     setDevices(response.data.data);    // ← antes era response.data
     setTotal(response.data.total);
-    setTotalPages(response.data.totalPages);
   }
 
   useEffect(() => {
     loadDevices();
     loadModels();
     loadCategories();
-    loadPeople();
 
     api.get('/departments').then((res) => setDepartments(res.data));
   }, []);
@@ -176,7 +159,6 @@ export default function DevicesPage() {
     setSearch('');
     setStatusCode('');
     setCategoryName('');
-    setAssignedSearch('');
     setLocation('');
     setModelId('');
     setAssignedTo('');
@@ -233,11 +215,6 @@ export default function DevicesPage() {
       setSelectedCategoryId('');
       setOpenCreate(false);
     }
-
-  async function loadPeople() {
-    const response = await api.get('/people', { params: { limit: 1000 } });
-    setPeople(response.data.data);
-  }
 
   function openManageModal(device: Device) {
     setSelectedDevice(device);
@@ -339,13 +316,10 @@ export default function DevicesPage() {
     { code: 'EN_BAJA', label: 'En baja' },
   ].filter((status) => status.code !== selectedDevice?.status?.code);
 
-  async function openDetailModal(device: Device) {
-  setDetailDevice(device);
-  setOpenDetail(true);
-
-  const response = await api.get(`/devices/${device.id}/movements`);
-  setMovements(response.data);
-}
+  function openDetailModal(device: Device) {
+    setDetailDevice(device);
+    setOpenDetail(true);
+  }
 
   async function handleDeleteDevice() {
     if (!selectedDevice) return;
@@ -978,42 +952,8 @@ export default function DevicesPage() {
             <Typography variant="h6" sx={{ mb: 1 }}>
               Historial
             </Typography>
-                
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell>Fecha</TableCell>
-                  <TableCell>Tipo</TableCell>
-                  <TableCell>Estado anterior</TableCell>
-                  <TableCell>Estado nuevo</TableCell>
-                  <TableCell>Persona</TableCell>
-                  <TableCell>Detalle</TableCell>
-                </TableRow>
-              </TableHead>
-                
-              <TableBody>
-                {movements.map((movement) => (
-                  <TableRow key={movement.id}>
-                    <TableCell>
-                      {new Date(movement.date).toLocaleString()}
-                    </TableCell>
-                    <TableCell>{movement.type}</TableCell>
-                    <TableCell>{movement.previousStatus || '-'}</TableCell>
-                    <TableCell>{movement.newStatus || '-'}</TableCell>
-                    <TableCell>{movement.person?.fullName || '-'}</TableCell>
-                    <TableCell>{movement.detail || '-'}</TableCell>
-                  </TableRow>
-                ))}
-        
-                {movements.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={6} align="center">
-                      Sin movimientos
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
+
+            {detailDevice && <DeviceHistory deviceId={detailDevice.id} />}
           </DialogContent>
               
           <DialogActions>

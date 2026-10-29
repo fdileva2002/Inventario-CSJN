@@ -8,6 +8,8 @@ import {
   Prisma,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { getCurrentUserId } from '../common/request-context';
+import { applyStockMovement } from '../consumables/consumable-stock';
 import { CreateConsumableAssignmentDto } from './dto/create-consumable-assignment.dto';
 
 @Injectable()
@@ -15,7 +17,7 @@ export class ConsumableAssignmentsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(createConsumableAssignmentDto: CreateConsumableAssignmentDto) {
-  const { consumableId, personId, departmentId, quantity, notes, createdById } =
+  const { consumableId, personId, departmentId, quantity, notes } =
     createConsumableAssignmentDto;
 
   if (!personId && !departmentId) {
@@ -24,9 +26,14 @@ export class ConsumableAssignmentsService {
     );
   }
 
+  if (personId && departmentId) {
+    throw new BadRequestException(
+      'No se puede asignar a una persona y una dependencia al mismo tiempo',
+    );
+  }
+
   const consumable = await this.prisma.consumable.findUnique({
     where: { id: consumableId },
-    include: { stock: true },
   });
 
   if (!consumable) {
@@ -51,47 +58,26 @@ export class ConsumableAssignmentsService {
     personName = department.name;
   }
 
-  const currentStock = consumable.stock?.currentStock ?? 0;
-  const newStock = currentStock - quantity;
-
-  if (newStock < 0) {
-    throw new BadRequestException(
-      `Stock insuficiente. Stock actual: ${currentStock}, intentando asignar: ${quantity}`,
-    );
-  }
-
-  return this.prisma.$transaction(async (tx) => {
-    await tx.consumableStock.upsert({
-      where: { consumableId },
-      update: { currentStock: newStock },
-      create: { consumableId, currentStock: newStock },
+  return this.prisma.transaction(async (tx) => {
+    await applyStockMovement(tx, {
+      consumableId,
+      type: ConsumableMovementType.SALIDA_POR_CONSUMO,
+      delta: -quantity,
+      detail: notes?.trim() || `Asignación a ${personName}`,
     });
 
-    const assignment = await tx.consumableAssignment.create({
+    return tx.consumableAssignment.create({
       data: {
         consumableId,
         personId: personId ?? null,
+        departmentId: departmentId ?? null,
         quantity,
         assignedAt: new Date(),
         notes,
-        createdById,
+        createdById: getCurrentUserId(),
       },
       include: this.getInclude(),
     });
-
-    await tx.consumableMovement.create({
-      data: {
-        consumableId,
-        type: ConsumableMovementType.SALIDA_POR_CONSUMO,
-        quantity,
-        previousStock: currentStock,
-        newStock,
-        detail: notes?.trim() || `Asignación a ${personName}`,
-        userId: createdById,
-      },
-    });
-
-    return assignment;
   });
 }
 
@@ -156,7 +142,8 @@ export class ConsumableAssignmentsService {
           stock: true,
         },
       },
-      person: true
+      person: true,
+      department: true,
     } satisfies Prisma.ConsumableAssignmentInclude;
   }
 }

@@ -17,10 +17,10 @@ export class PeopleService {
       throw new BadRequestException('Ya existe una persona con ese CUIL');
     }
 
-    return this.prisma.person.create({
+    return this.prisma.transaction((tx) => tx.person.create({
       data: createPersonDto,
       include: { department: true },
-    });
+    }));
   }
 
   async findAll(filters: FindPeopleDto) {
@@ -79,18 +79,18 @@ export class PeopleService {
   async update(id: number, updatePersonDto: UpdatePersonDto) {
     await this.findOne(id);
 
-    return this.prisma.person.update({
+    return this.prisma.transaction((tx) => tx.person.update({
       where: { id },
       data: updatePersonDto,
       include: { department: true },
-    });
+    }));
   }
 
   async remove(id: number) {
     await this.findOne(id);
 
     try {
-      return await this.prisma.person.delete({ where: { id } });
+      return await this.prisma.transaction((tx) => tx.person.delete({ where: { id } }));
     } catch (error: any) {
       if (error.code === 'P2003') {
         throw new BadRequestException(

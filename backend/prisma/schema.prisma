@@ -34,6 +34,7 @@ model Department {
 
   people      Person[]
   assignments DeviceAssignment[]
+  deviceMovements DeviceMovement[]
   consumableAssignments ConsumableAssignment[]
 }
 
@@ -230,6 +231,7 @@ model DeviceAssignment {
 
   @@index([deviceId])
   @@index([personId])
+  @@index([departmentId])
   @@index([status])
 }
 
@@ -240,16 +242,23 @@ model DeviceMovement {
   previousStatus     String?
   newStatus          String?
   personId           Int?
+  departmentId       Int?
+  previousLocation   String?
+  newLocation        String?
   receiptId          Int?
   detail             String?
   userId             Int?
   date               DateTime   @default(now())
 
-  device             Device     @relation(fields: [deviceId], references: [id])
-  person             Person?    @relation(fields: [personId], references: [id])
-  user               User?      @relation(fields: [userId], references: [id])
+  device             Device      @relation(fields: [deviceId], references: [id])
+  person             Person?     @relation(fields: [personId], references: [id])
+  department         Department? @relation(fields: [departmentId], references: [id])
+  user               User?       @relation(fields: [userId], references: [id])
 
   @@index([deviceId])
+  @@index([personId])
+  @@index([departmentId])
+  @@index([receiptId])
   @@index([date])
 }
 
@@ -319,8 +328,14 @@ model ConsumableAssignment {
   consumable         Consumable @relation(fields: [consumableId], references: [id])
   person             Person?     @relation(fields: [personId], references: [id])
   department         Department? @relation(fields: [departmentId], references: [id])
+
+  @@index([consumableId])
+  @@index([personId])
+  @@index([departmentId])
 }
 
+// Lo escriben los triggers de la base (migración audit_triggers), no el código.
+// En UPDATE, previousValues/newValues guardan solo los campos modificados.
 model AuditLog {
   id                 Int        @id @default(autoincrement())
   entity             String
@@ -328,12 +343,14 @@ model AuditLog {
   action             String
   previousValues     Json?
   newValues          Json?
+  changedFields      String[]
   userId             Int?
   date               DateTime   @default(now())
 
   user               User?      @relation(fields: [userId], references: [id])
 
   @@index([entity, entityId])
+  @@index([userId])
   @@index([date])
 }
 

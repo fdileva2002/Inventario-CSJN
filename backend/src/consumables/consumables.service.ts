@@ -14,19 +14,23 @@ export class ConsumablesService {
 
   async create(createConsumableDto: CreateConsumableDto) {
     try {
-      const consumable = await this.prisma.consumable.create({
-        data: {
-          ...createConsumableDto,
-          minimumStock: createConsumableDto.minimumStock ?? 0,
-        },
-      });
+      const consumable = await this.prisma.transaction(async (tx) => {
+        const created = await tx.consumable.create({
+          data: {
+            ...createConsumableDto,
+            minimumStock: createConsumableDto.minimumStock ?? 0,
+          },
+        });
 
-      // Crear stock inicial
-      await this.prisma.consumableStock.create({
-        data: {
-          consumableId: consumable.id,
-          currentStock: 0,
-        },
+        // Stock inicial en 0: todo ingreso posterior pasa por un movimiento.
+        await tx.consumableStock.create({
+          data: {
+            consumableId: created.id,
+            currentStock: 0,
+          },
+        });
+
+        return created;
       });
 
       return this.findOne(consumable.id);
@@ -100,10 +104,10 @@ export class ConsumablesService {
     await this.findOne(id);
 
     try {
-      return await this.prisma.consumable.update({
+      return await this.prisma.transaction((tx) => tx.consumable.update({
         where: { id },
         data: updateConsumableDto,
-      });
+      }));
     } catch (error: any) {
       if (error.code === 'P2002') {
         throw new BadRequestException(
@@ -118,9 +122,9 @@ export class ConsumablesService {
     await this.findOne(id);
 
     try {
-      return await this.prisma.consumable.delete({
+      return await this.prisma.transaction((tx) => tx.consumable.delete({
         where: { id },
-      });
+      }));
     } catch (error: any) {
       const message = String(error?.message ?? '');
 

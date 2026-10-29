@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from 'src/prisma/prisma.service';
+import { getCurrentUserId } from '../common/request-context';
 import { CreateAssignmentDto } from './dto/create-assignment.dto';
 import { ReturnAssignmentDto } from './dto/return-assignment.dto';
 
@@ -35,6 +36,8 @@ export class AssignmentsService {
       throw new NotFoundException('Dispositivo no encontrado');
     }
   
+    let assigneeName = '';
+
     if (personId) {
       const person = await this.prisma.person.findUnique({
         where: { id: personId },
@@ -42,8 +45,9 @@ export class AssignmentsService {
       if (!person) {
         throw new NotFoundException('Persona no encontrada');
       }
+      assigneeName = person.fullName;
     }
-  
+
     if (departmentId) {
       const department = await this.prisma.department.findUnique({
         where: { id: departmentId },
@@ -51,78 +55,83 @@ export class AssignmentsService {
       if (!department) {
         throw new NotFoundException('Dependencia no encontrada');
       }
+      assigneeName = department.name;
     }
-  
+
     const availableStatus = await this.prisma.deviceStatus.findUnique({
       where: { code: 'DISPONIBLE' },
     });
-  
+
     if (!availableStatus) {
       throw new NotFoundException('No existe el estado DISPONIBLE');
     }
-  
-    if (device.statusId !== availableStatus.id) {
-      throw new BadRequestException(
-        'Solo se pueden asignar dispositivos en estado DISPONIBLE',
-      );
-    }
-  
-    const activeAssignment = await this.prisma.deviceAssignment.findFirst({
-      where: { deviceId, returnedAt: null },
-    });
-  
-    if (activeAssignment) {
-      throw new BadRequestException(
-        'El dispositivo ya está asignado y no fue devuelto',
-      );
-    }
-  
+
     const inUseStatus = await this.prisma.deviceStatus.findUnique({
       where: { code: 'EN_FUNCIONAMIENTO' },
     });
-  
+
     if (!inUseStatus) {
       throw new NotFoundException('No existe el estado EN_FUNCIONAMIENTO');
     }
-  
-    const assignment = await this.prisma.deviceAssignment.create({
-      data: {
-        deviceId,
-        personId: personId ?? null,
-        departmentId: departmentId ?? null,
-        assignedAt: new Date(),
-        status: 'ACTIVA',
-        notes,
-      },
-      include: {
-        device: true,
-        person: true,
-      },
-    });
-  
-    if (createAssignmentDto.location) {
-      await this.prisma.device.update({
-        where: { id: deviceId },
-        data: { location: createAssignmentDto.location },
+
+    const newLocation = createAssignmentDto.location?.trim() || undefined;
+
+    const assignment = await this.prisma.transaction(async (tx) => {
+      // Pasar a EN_FUNCIONAMIENTO solo si sigue DISPONIBLE: si otra asignación
+      // llegó primero, este update no afecta filas y se corta acá.
+      const transition = await tx.device.updateMany({
+        where: { id: deviceId, statusId: availableStatus.id },
+        data: {
+          statusId: inUseStatus.id,
+          ...(newLocation ? { location: newLocation } : {}),
+        },
       });
-    }
-  
-    await this.prisma.device.update({
-      where: { id: deviceId },
-      data: { statusId: inUseStatus.id },
+
+      if (transition.count !== 1) {
+        throw new BadRequestException(
+          'Solo se pueden asignar dispositivos en estado DISPONIBLE',
+        );
+      }
+
+      const activeAssignment = await tx.deviceAssignment.findFirst({
+        where: { deviceId, returnedAt: null },
+      });
+
+      if (activeAssignment) {
+        throw new BadRequestException(
+          'El dispositivo ya está asignado y no fue devuelto',
+        );
+      }
+
+      const created = await tx.deviceAssignment.create({
+        data: {
+          deviceId,
+          personId: personId ?? null,
+          departmentId: departmentId ?? null,
+          assignedAt: new Date(),
+          status: 'ACTIVA',
+          notes,
+          createdById: getCurrentUserId(),
+        },
+      });
+
+      await tx.deviceMovement.create({
+        data: {
+          deviceId,
+          type: 'ASIGNACION',
+          previousStatus: device.status.code,
+          newStatus: inUseStatus.code,
+          personId: personId ?? null,
+          departmentId: departmentId ?? null,
+          previousLocation: newLocation ? device.location : undefined,
+          newLocation,
+          detail: notes?.trim() || `Asignación a ${assigneeName}`,
+        },
+      });
+
+      return created;
     });
-  
-    await this.prisma.deviceMovement.create({
-      data: {
-        deviceId,
-        type: 'ASIGNACION',
-        previousStatus: device.status.code,
-        newStatus: inUseStatus.code,
-        personId: personId ?? null,
-        detail: notes ?? (personId ? 'Asignación a persona' : 'Asignación a dependencia'),
-      },
-    });
-  
+
     return this.prisma.deviceAssignment.findUnique({
       where: { id: assignment.id },
       include: {
@@ -154,6 +163,7 @@ export class AssignmentsService {
           },
         },
         person: true,
+        department: true,
       },
       orderBy: {
         assignedAt: 'desc',
@@ -177,6 +187,7 @@ export class AssignmentsService {
           },
         },
         person: true,
+        department: true,
       },
       orderBy: {
         assignedAt: 'desc',
@@ -214,31 +225,39 @@ export class AssignmentsService {
       );
     }
 
-    await this.prisma.deviceAssignment.update({
-      where: { id },
-      data: {
-        returnedAt: new Date(),
-        status: 'FINALIZADA',
-        notes: returnAssignmentDto.notes ?? assignment.notes,
-      },
-    });
+    await this.prisma.transaction(async (tx) => {
+      // Cierra la asignación solo si sigue abierta (evita doble devolución).
+      const closed = await tx.deviceAssignment.updateMany({
+        where: { id, returnedAt: null },
+        data: {
+          returnedAt: new Date(),
+          status: 'FINALIZADA',
+          notes: returnAssignmentDto.notes ?? assignment.notes,
+        },
+      });
 
-    await this.prisma.device.update({
-      where: { id: assignment.deviceId },
-      data: {
-        statusId: toConfigureStatus.id,
-      },
-    });
+      if (closed.count !== 1) {
+        throw new BadRequestException('La asignación ya fue cerrada');
+      }
 
-    await this.prisma.deviceMovement.create({
-      data: {
-        deviceId: assignment.deviceId,
-        type: 'DEVOLUCION',
-        previousStatus: assignment.device.status.code,
-        newStatus: toConfigureStatus.code,
-        personId: assignment.personId,
-        detail: returnAssignmentDto.notes ?? 'Devolución de dispositivo',
-      },
+      await tx.device.update({
+        where: { id: assignment.deviceId },
+        data: {
+          statusId: toConfigureStatus.id,
+        },
+      });
+
+      await tx.deviceMovement.create({
+        data: {
+          deviceId: assignment.deviceId,
+          type: 'DEVOLUCION',
+          previousStatus: assignment.device.status.code,
+          newStatus: toConfigureStatus.code,
+          personId: assignment.personId,
+          departmentId: assignment.departmentId,
+          detail: returnAssignmentDto.notes?.trim() || 'Devolución de dispositivo',
+        },
+      });
     });
 
     return this.prisma.deviceAssignment.findUnique({
@@ -254,6 +273,7 @@ export class AssignmentsService {
           },
         },
         person: true,
+        department: true,
       },
     });
   }
@@ -280,6 +300,7 @@ export class AssignmentsService {
           },
         },
         person: true,
+        department: true,
       },
       orderBy: {
         assignedAt: 'desc',
@@ -309,6 +330,7 @@ export class AssignmentsService {
           },
         },
         person: true,
+        department: true,
       },
       orderBy: {
         assignedAt: 'desc',

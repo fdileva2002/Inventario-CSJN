@@ -1,5 +1,8 @@
 import { Module } from '@nestjs/common';
+import { APP_INTERCEPTOR } from '@nestjs/core';
 import { PrismaModule } from './prisma/prisma.module';
+import { RequestContextInterceptor } from './common/request-context';
+import { AuditModule } from './audit/audit.module';
 import { PeopleModule } from './people/people.module';
 import { DevicesModule } from './devices/devices.module';
 import { AssignmentsModule } from './assignments/assignments.module';
@@ -10,11 +13,7 @@ import { PurchaseOrdersModule } from './purchase-orders/purchase-orders.module';
 import { PurchaseOrderItemsModule } from './purchase-order-items/purchase-order-items.module';
 import { ReceiptsModule } from './receipts/receipts.module';
 import { ConsumablesModule } from './consumables/consumables.module';
-import { ConsumableMovementsController } from './consumable-movements/consumable-movements.controller';
-import { ConsumableMovementsService } from './consumable-movements/consumable-movements.service';
 import { ConsumableMovementsModule } from './consumable-movements/consumable-movements.module';
-import { ConsumableAssignmentsController } from './consumable-assignments/consumable-assignments.controller';
-import { ConsumableAssignmentsService } from './consumable-assignments/consumable-assignments.service';
 import { ConsumableAssignmentsModule } from './consumable-assignments/consumable-assignments.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { AuthModule } from './auth/auth.module';
@@ -40,8 +39,8 @@ import { DepartmentsModule } from './departments/departments.module';
     AuthModule,
     UsersModule,
     DepartmentsModule,
+    AuditModule,
   ],
-  controllers: [ConsumableMovementsController, ConsumableAssignmentsController],
-  providers: [ConsumableMovementsService, ConsumableAssignmentsService],
+  providers: [{ provide: APP_INTERCEPTOR, useClass: RequestContextInterceptor }],
 })
 export class AppModule {}

@@ -21,12 +21,12 @@ export class DeviceModelsService {
     }
 
     try {
-      return await this.prisma.deviceModel.create({
+      return await this.prisma.transaction((tx) => tx.deviceModel.create({
         data: createDeviceModelDto,
         include: {
           category: true,
         },
-      });
+      }));
     } catch (error: any) {
       if (error.code === 'P2002') {
         throw new BadRequestException(
@@ -111,13 +111,13 @@ export class DeviceModelsService {
     }
 
     try {
-      return await this.prisma.deviceModel.update({
+      return await this.prisma.transaction((tx) => tx.deviceModel.update({
         where: { id },
         data: updateDeviceModelDto,
         include: {
           category: true,
         },
-      });
+      }));
     } catch (error: any) {
       const message = String(error?.message ?? '');
 
@@ -145,9 +145,9 @@ export class DeviceModelsService {
     await this.findOne(id);
 
     try {
-      return await this.prisma.deviceModel.delete({
+      return await this.prisma.transaction((tx) => tx.deviceModel.delete({
         where: { id },
-      });
+      }));
     } catch (error: any) {
       const message = String(error?.message ?? '');
 
