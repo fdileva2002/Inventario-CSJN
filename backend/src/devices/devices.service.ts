@@ -236,10 +236,10 @@ export class DevicesService {
         entryDate: updateDeviceDto.entryDate
           ? new Date(updateDeviceDto.entryDate)
           : undefined,
-        hostname:
-          updateDeviceDto.hostname !== undefined
-          ? updateDeviceDto.hostname.trim()
-          : undefined,
+        // Texto vacío se guarda como null: "sin dato" tiene una sola representación.
+        hostname: this.optionalText(updateDeviceDto.hostname),
+        location: this.optionalText(updateDeviceDto.location),
+        notes: this.optionalText(updateDeviceDto.notes),
       },
       include: {
         category: true,
@@ -415,6 +415,11 @@ export class DevicesService {
     throw error;
   }
 }
+
+  private optionalText(value: string | undefined) {
+    if (value === undefined) return undefined;
+    return value.trim() || null;
+  }
 
   private getTagPrefixByCategory(categoryName: string, categoryCode?: string | null) {
     if (categoryCode) return categoryCode;

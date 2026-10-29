@@ -31,6 +31,7 @@ type Device = {
   serialNumber: string;
   hostname?: string | null;
   location?: string | null;
+  notes?: string | null;
   category?: { name: string };
   model?: { brand: string; model: string };
   status?: { 
@@ -106,7 +107,11 @@ export default function DevicesPage() {
   notes: '',
   location: '',
 });
-  const [manageHostname, setManageHostname] = useState('');
+  const [dataForm, setDataForm] = useState({
+    hostname: '',
+    location: '',
+    notes: '',
+  });
   const [statusForm, setStatusForm] = useState({
     statusCode: '',
     notes: '',
@@ -218,7 +223,11 @@ export default function DevicesPage() {
 
   function openManageModal(device: Device) {
     setSelectedDevice(device);
-    setManageHostname(device.hostname || '');
+    setDataForm({
+      hostname: device.hostname || '',
+      location: device.location || '',
+      notes: device.notes || '',
+    });
     setAssignmentForm({
       personId: '',
       departmentId: '',
@@ -255,15 +264,33 @@ export default function DevicesPage() {
     }
   }
 
-  async function handleUpdateHostname() {
-  if (!selectedDevice) return;
+  // Los datos se pueden editar en cualquier estado (por ejemplo, renombrar un
+  // equipo que sigue asignado a la misma persona). El estado no se toca acá.
+  async function handleUpdateData() {
+    if (!selectedDevice) return;
 
-  await api.patch(`/devices/${selectedDevice.id}`, {
-    hostname: manageHostname,
-  });
+    // Solo los campos modificados, para que la auditoría no registre cambios vacíos.
+    const changes: Record<string, string> = {};
+    if (dataForm.hostname !== (selectedDevice.hostname || '')) changes.hostname = dataForm.hostname;
+    if (dataForm.location !== (selectedDevice.location || '')) changes.location = dataForm.location;
+    if (dataForm.notes !== (selectedDevice.notes || '')) changes.notes = dataForm.notes;
 
-  loadDevices();
+    try {
+      const response = await api.patch(`/devices/${selectedDevice.id}`, changes);
+
+      setSelectedDevice({ ...selectedDevice, ...response.data });
+      loadDevices();
+      alert('Datos guardados');
+    } catch (error: any) {
+      alert(error?.response?.data?.message || 'Error al guardar los datos');
+    }
   }
+
+  const dataChanged =
+    !!selectedDevice &&
+    (dataForm.hostname !== (selectedDevice.hostname || '') ||
+      dataForm.location !== (selectedDevice.location || '') ||
+      dataForm.notes !== (selectedDevice.notes || ''));
 
   async function handleReturnDevice() {
     if (!selectedDevice) return;
@@ -713,6 +740,45 @@ export default function DevicesPage() {
               Estado actual: {selectedDevice?.status?.name || '-'}
             </Typography>
 
+            <Typography variant="subtitle2" sx={{ mt: 1 }}>
+              Datos del equipo
+            </Typography>
+
+            <TextField
+              label="Hostname"
+              fullWidth
+              margin="dense"
+              value={dataForm.hostname}
+              onChange={(e) => setDataForm({ ...dataForm, hostname: e.target.value })}
+            />
+
+            <TextField
+              label="Ubicación"
+              fullWidth
+              margin="dense"
+              value={dataForm.location}
+              onChange={(e) => setDataForm({ ...dataForm, location: e.target.value })}
+            />
+
+            <TextField
+              label="Notas"
+              fullWidth
+              margin="dense"
+              multiline
+              minRows={2}
+              value={dataForm.notes}
+              onChange={(e) => setDataForm({ ...dataForm, notes: e.target.value })}
+            />
+
+            <Button
+              variant="outlined"
+              onClick={handleUpdateData}
+              disabled={!dataChanged}
+              sx={{ mt: 1, mb: 2 }}
+            >
+              Guardar datos
+            </Button>
+
               {selectedDevice?.status?.code !== 'EN_FUNCIONAMIENTO' && (
                 <>
                   <TextField
@@ -749,23 +815,6 @@ export default function DevicesPage() {
               
             {selectedDevice?.status?.name === 'Disponible' && (
               <>
-                <TextField
-                  label="Hostname"
-                  fullWidth
-                  margin="normal"
-                  value={manageHostname}
-                  onChange={(e) => setManageHostname(e.target.value)}
-                />
-
-                <Button
-                  variant="outlined"
-                  onClick={handleUpdateHostname}
-                  sx={{ mb: 2 }}
-                >
-                  Guardar hostname
-                </Button>
-
-
                 <TextField
                   select
                   label="Asignar a"
