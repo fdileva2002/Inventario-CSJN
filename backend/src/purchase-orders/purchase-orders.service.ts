@@ -21,6 +21,15 @@ export class PurchaseOrdersService {
       throw new NotFoundException('El proveedor indicado no existe');
     }
 
+    if (createPurchaseOrderDto.parentOrderId) {
+      const parent = await this.prisma.purchaseOrder.findUnique({
+        where: { id: createPurchaseOrderDto.parentOrderId },
+      });
+      if (!parent) {
+        throw new NotFoundException('La orden original indicada no existe');
+      }
+    }
+
     try {
       return await this.prisma.transaction((tx) => tx.purchaseOrder.create({
         data: {
@@ -73,7 +82,8 @@ export class PurchaseOrdersService {
       where,
       include: {
         supplier: true,
-        parentOrder: true, // ← agregar
+        parentOrder: { select: { id: true, number: true } },
+        childOrders: { select: { id: true, number: true }, orderBy: { date: 'asc' } },
       },
       orderBy: { date: 'desc' },
     });
@@ -84,6 +94,8 @@ export class PurchaseOrdersService {
       where: { id },
       include: {
         supplier: true,
+        parentOrder: { select: { id: true, number: true } },
+        childOrders: { select: { id: true, number: true }, orderBy: { date: 'asc' } },
       },
     });
 
@@ -138,7 +150,15 @@ export class PurchaseOrdersService {
   }
 
   async remove(id: number) {
-    await this.findOne(id);
+    const order = await this.findOne(id);
+
+    // La relación de ampliación es opcional: sin este control, borrar la original
+    // dejaría a sus ampliaciones sin referencia en silencio.
+    if (order.childOrders.length > 0) {
+      throw new BadRequestException(
+        `No se puede eliminar: es la orden original de ${order.childOrders.map((o) => o.number).join(', ')}`,
+      );
+    }
 
     try {
       return await this.prisma.transaction((tx) => tx.purchaseOrder.delete({

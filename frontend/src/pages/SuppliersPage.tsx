@@ -142,7 +142,7 @@ export default function SuppliersPage() {
       )}
 
       <Paper sx={{ p: 2, mb: 3 }}>
-        <Box sx={{ display: 'flex', gap: 2 }}>
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
           <TextField
             label="Buscar proveedor"
             value={search}
@@ -184,7 +184,7 @@ export default function SuppliersPage() {
                 <TableCell>{supplier.phone || '-'}</TableCell>
                 <TableCell>
                   {canEdit && (
-                    <Box sx={{ display: 'flex', gap: 1 }}>
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
                       <Button size="small" variant="outlined" onClick={() => openEditModal(supplier)}>
                         Editar
                       </Button>

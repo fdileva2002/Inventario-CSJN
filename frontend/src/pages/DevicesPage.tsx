@@ -25,6 +25,30 @@ import AppLayout from '../components/AppLayout';
 import DeviceHistory from '../components/DeviceHistory';
 import * as XLSX from 'xlsx';
 
+type ExportComponent = {
+  type: string;
+  brand?: string | null;
+  model?: string | null;
+  capacity?: string | null;
+  serialNumber?: string | null;
+  notes?: string | null;
+};
+
+// Lo que devuelve /devices/export: el equipo con su asignación vigente y componentes instalados.
+type ExportDevice = Device & {
+  notes?: string | null;
+  purchaseDate?: string | null;
+  entryDate?: string | null;
+  supplier?: { name: string } | null;
+  purchaseOrder?: { number: string } | null;
+  assignments?: {
+    assignedAt?: string;
+    person?: { fullName: string; employeeId?: string } | null;
+    department?: { name: string } | null;
+  }[];
+  components: ExportComponent[];
+};
+
 type Device = {
   id: number;
   tag: string;
@@ -128,25 +152,30 @@ export default function DevicesPage() {
   const [page, setPage] = useState(0);
   const rowsPerPage = 40;
   const [total, setTotal] = useState(0);
+  const [exporting, setExporting] = useState(false);
   const [personSearch, setPersonSearch] = useState('');
   const [filteredPeople, setFilteredPeople] = useState<Person[]>([]);
   const [selectedPerson, setSelectedPerson] = useState<Person | null>(null);
   const [deptSearch, setDeptSearch] = useState('');
 
 
-  async function loadDevices() {
-    const params: any = {};
+  // Filtros actuales; los usan la tabla y la exportación.
+  function filterParams() {
+    const params: Record<string, string | number> = {};
     if (search.trim()) params.search = search;
     if (statusCode) params.statusCode = statusCode;
     if (categoryName) params.categoryName = categoryName;
     if (assignedTo.trim()) params.assignedTo = assignedTo;
     if (location.trim()) params.location = location;
     if (modelId) params.modelId = Number(modelId);
-    params.page = page;
-    params.limit = 20;
+    return params;
+  }
 
-    const response = await api.get('/devices', { params });
-    setDevices(response.data.data);    // ← antes era response.data
+  async function loadDevices() {
+    const response = await api.get('/devices', {
+      params: { ...filterParams(), page, limit: rowsPerPage },
+    });
+    setDevices(response.data.data);
     setTotal(response.data.total);
   }
 
@@ -368,24 +397,64 @@ export default function DevicesPage() {
     }
   }
 
-  function exportToExcel() {
-    const rows = devices.map((device) => ({
-      Tag: device.tag,
-      'Número de serie': device.serialNumber,
-      Hostname: device.hostname || '-',
-      MAC: device.macAddress || '-',
-      Categoría: device.category?.name || '-',
-      Marca: device.model?.brand || '-',
-      Modelo: device.model?.model || '-',
-      Estado: device.status?.name || '-',
-      Ubicación: device.location || '-',
-      'Asignado a': device.assignments?.[0]?.person?.fullName || 'Sin asignar',
-    }));
-  
-    const worksheet = XLSX.utils.json_to_sheet(rows);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Dispositivos');
-    XLSX.writeFile(workbook, `dispositivos_${new Date().toLocaleDateString('es-AR').replace(/\//g, '-')}.xlsx`);
+  // Exporta todo el resultado de la búsqueda (no solo la página visible) con el detalle
+  // completo de cada equipo; los componentes instalados van también en una hoja aparte.
+  async function exportToExcel() {
+    setExporting(true);
+    try {
+      const response = await api.get<ExportDevice[]>('/devices/export', { params: filterParams() });
+      const formatDate = (value?: string | null) => (value ? new Date(value).toLocaleDateString('es-AR') : '');
+      const describe = (c: ExportComponent) =>
+        [c.type, c.brand, c.model, c.capacity].filter(Boolean).join(' ') + (c.serialNumber ? ` (S/N ${c.serialNumber})` : '');
+
+      const rows = response.data.map((device) => {
+        const assignment = device.assignments?.[0];
+        return {
+          Tag: device.tag,
+          'Número de serie': device.serialNumber,
+          Hostname: device.hostname || '',
+          MAC: device.macAddress || '',
+          Categoría: device.category?.name || '',
+          Marca: device.model?.brand || '',
+          Modelo: device.model?.model || '',
+          Estado: device.status?.name || '',
+          Ubicación: device.location || '',
+          'Asignado a': assignment?.person?.fullName || assignment?.department?.name || '',
+          CUIL: assignment?.person?.employeeId || '',
+          'Asignado desde': formatDate(assignment?.assignedAt),
+          Componentes: device.components.map(describe).join('; '),
+          Proveedor: device.supplier?.name || '',
+          'Orden de compra': device.purchaseOrder?.number || '',
+          'Fecha de compra': formatDate(device.purchaseDate),
+          'Fecha de ingreso': formatDate(device.entryDate),
+          Notas: device.notes || '',
+        };
+      });
+
+      const componentRows = response.data.flatMap((device) =>
+        device.components.map((c) => ({
+          Tag: device.tag,
+          Hostname: device.hostname || '',
+          Tipo: c.type,
+          Marca: c.brand || '',
+          Modelo: c.model || '',
+          Capacidad: c.capacity || '',
+          'Número de serie': c.serialNumber || '',
+          Notas: c.notes || '',
+        })),
+      );
+
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(rows), 'Dispositivos');
+      if (componentRows.length > 0) {
+        XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(componentRows), 'Componentes');
+      }
+      XLSX.writeFile(workbook, `dispositivos_${new Date().toLocaleDateString('es-AR').replace(/\//g, '-')}.xlsx`);
+    } catch (error: any) {
+      alert(error?.response?.data?.message || 'Error al exportar');
+    } finally {
+      setExporting(false);
+    }
   }
 
   async function searchPeople(query: string) {
@@ -414,14 +483,14 @@ export default function DevicesPage() {
         Dispositivos
       </Typography>
 
-      <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mb: 2 }}>
         {canEdit && (
           <Button variant="contained" onClick={() => setOpenCreate(true)}>
             Nuevo dispositivo
           </Button>
         )}
-        <Button variant="outlined" onClick={exportToExcel} disabled={devices.length === 0}>
-          Exportar a Excel
+        <Button variant="outlined" onClick={exportToExcel} disabled={total === 0 || exporting}>
+          {exporting ? 'Exportando...' : `Exportar a Excel (${total})`}
         </Button>
       </Box>
 
@@ -433,7 +502,7 @@ export default function DevicesPage() {
         <Box
           sx={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(3, 1fr)',
+            gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)' },
             gap: 2,
           }}
         >
@@ -502,7 +571,7 @@ export default function DevicesPage() {
             onChange={(e) => setLocation(e.target.value)}
           />
 
-          <Box sx={{ display: 'flex', gap: 1 }}>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
             <Button variant="contained" onClick={loadDevices}>
               Buscar
             </Button>
@@ -574,7 +643,7 @@ export default function DevicesPage() {
                 </TableCell>
                 
                 <TableCell>
-                  <Box sx={{ display: 'flex', gap: 1 }}>
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
                     {(canAssign || canDelete) && (
                       <>
                         {canAssign && (
@@ -764,7 +833,7 @@ export default function DevicesPage() {
               Estado actual: {selectedDevice?.status?.name || '-'}
             </Typography>
 
-            {canEdit && (
+            {canAssign && (
             <>
             <Typography variant="subtitle2" sx={{ mt: 1 }}>
               Datos del equipo
@@ -784,6 +853,8 @@ export default function DevicesPage() {
               margin="dense"
               placeholder="AA:BB:CC:DD:EE:FF"
               value={dataForm.macAddress}
+              disabled={!canEdit}
+              helperText={canEdit ? undefined : "La MAC la modifica un administrador"}
               onChange={(e) => setDataForm({ ...dataForm, macAddress: e.target.value })}
             />
 
@@ -1012,7 +1083,7 @@ export default function DevicesPage() {
             <Box
               sx={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(2, 1fr)',
+                gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' },
                 gap: 2,
                 mb: 3,
               }}

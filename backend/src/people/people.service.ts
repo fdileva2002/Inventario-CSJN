@@ -17,10 +17,14 @@ export class PeopleService {
       throw new BadRequestException('Ya existe una persona con ese CUIL');
     }
 
-    return this.prisma.transaction((tx) => tx.person.create({
-      data: createPersonDto,
-      include: { department: true },
-    }));
+    try {
+      return await this.prisma.transaction((tx) => tx.person.create({
+        data: createPersonDto,
+        include: { department: true },
+      }));
+    } catch (error) {
+      this.rethrowDuplicate(error);
+    }
   }
 
   async findAll(filters: FindPeopleDto) {
@@ -79,11 +83,23 @@ export class PeopleService {
   async update(id: number, updatePersonDto: UpdatePersonDto) {
     await this.findOne(id);
 
-    return this.prisma.transaction((tx) => tx.person.update({
-      where: { id },
-      data: updatePersonDto,
-      include: { department: true },
-    }));
+    try {
+      return await this.prisma.transaction((tx) => tx.person.update({
+        where: { id },
+        data: updatePersonDto,
+        include: { department: true },
+      }));
+    } catch (error) {
+      this.rethrowDuplicate(error);
+    }
+  }
+
+  // El índice único también cubre la edición y dos altas simultáneas con el mismo CUIL.
+  private rethrowDuplicate(error: any): never {
+    if (error?.code === 'P2002') {
+      throw new BadRequestException('Ya existe una persona con ese CUIL');
+    }
+    throw error;
   }
 
   async remove(id: number) {

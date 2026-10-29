@@ -4,7 +4,8 @@ import { UserRole } from '@prisma/client';
 //
 //                 Superadmin  Administrador  Técnico  Consulta
 //   LECTURA           ✔             ✔            ✔        ✔     ver todo
-//   ASIGNACION        ✔             ✔            ✔              asignar/devolver equipos, entregar consumibles
+//   ASIGNACION        ✔             ✔            ✔              asignar/devolver equipos, entregar consumibles,
+//                                                               editar hostname/ubicación/notas
 //   CARGA             ✔             ✔                           altas y ediciones, cambios de estado
 //   TOTAL             ✔                                         borrar, ajustar stock, usuarios
 

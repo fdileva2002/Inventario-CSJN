@@ -134,7 +134,7 @@ Después de correr el seed, el usuario administrador es:
 |---|---|
 | `SUPERADMIN` | Todo: también borrar, ajustar stock y administrar usuarios |
 | `ADMINISTRADOR` | Cargar y editar (equipos, consumibles, OC, recepciones, personas, componentes), cambiar estados. No borra ni ajusta stock |
-| `TECNICO` | Asignar y devolver equipos, entregar consumibles, instalar/mover/retirar componentes |
+| `TECNICO` | Asignar y devolver equipos, editar hostname, ubicación y notas, entregar consumibles, instalar/mover/retirar componentes |
 | `CONSULTA` | Solo ver |
 
 Los permisos se definen por grupo en `src/auth/roles.ts` (`LECTURA`, `ASIGNACION`, `CARGA`, `TOTAL`) y cada endpoint declara uno. El frontend replica la tabla en `frontend/src/auth/permissions.ts` solo para mostrar u ocultar botones: quien hace cumplir los permisos es el backend.
@@ -158,10 +158,18 @@ Los roles se gestionan desde la página **Usuarios** (solo visible para Superadm
 - Devolución automática a estado "A configurar"
 - Cambio de ubicación al asignar
 - Filtros avanzados: tag, serial, hostname, modelo, categoría, estado, persona/dependencia, ubicación
-- Paginación (20 por página)
-- Historial de movimientos por dispositivo
-- Exportar búsqueda a Excel
+- Paginación (40 por página)
+- Historial de movimientos por dispositivo, con los cambios de datos mostrando nombres (estado, modelo...) en lugar de ids
+- Exportar a Excel **todo el resultado de la búsqueda** (no solo la página), con asignación vigente, componentes instalados, proveedor, OC, fechas y notas; los componentes van además en una hoja aparte (`GET /devices/export`, hasta 20.000 equipos)
 - Chips de color por estado
+
+### Movimientos
+- Pantalla única para consultar el historial de **equipos**, **consumibles** y **componentes**
+- Filtros: rango de fechas (con atajos: hoy, últimos 7 días, este mes, mes anterior, este año, todo), tipo de movimiento (uno o varios), persona, dependencia y búsqueda por equipo o consumible
+- Totales por tipo en el período (en consumibles, también las unidades): responden "cuántas asignaciones / entregas / bajas hubo en tal período". Al tocar una tarjeta se filtra por ese tipo
+- Exportar a Excel con una hoja de resumen (filtros usados y totales) y otra con todos los movimientos (`GET /movements/export`, hasta 50.000)
+- Desde Personas ("Ver todos los movimientos") y Dependencias ("Ver movimientos") se abre ya filtrada
+- Las entregas de consumibles guardan a quién se entregaron (persona o dependencia). Las anteriores a la migración `movimientos_consumibles` conservan el destinatario solo en el texto del detalle
 
 ### Componentes
 - Piezas con seguimiento propio (memoria, disco, fuente...), con número de serie opcional y único
@@ -173,7 +181,7 @@ Los roles se gestionan desde la página **Usuarios** (solo visible para Superadm
 - Stock por cantidad (no por unidad individual)
 - Movimientos: ingreso por compra, salida por consumo, ajuste positivo/negativo
 - Alerta de stock bajo
-- Asignación a personas
+- Entrega a personas o dependencias: varios consumibles en una sola entrega, buscando entre cartuchos y otros insumos. Se descuentan todos o ninguno: si a uno le falta stock, se avisa cuál y no se entrega nada
 - Exportar a Excel
 
 ### Personas
@@ -188,8 +196,10 @@ Los roles se gestionan desde la página **Usuarios** (solo visible para Superadm
 
 ### Órdenes de compra
 - Cabecera con número, proveedor, fecha y estado (PENDIENTE / PARCIAL / COMPLETA / ANULADA)
-- Ítems de tipo DEVICE o CONSUMABLE
+- Ítems de tipo dispositivo o consumible (con su color / variante)
 - Filtro por categoría al agregar ítems de dispositivo
+- Crear proveedor, modelo o consumible sin salir de la orden
+- Ampliaciones: una orden puede ser ampliación de otra. En la lista y en el detalle se ve "Ampliación de X" y "Ampliada por Y" (al tocarlo se abre esa orden). No se puede borrar una orden original que tenga ampliaciones
 - Recepciones parciales o totales
 - Estado visual de dispositivos cargados por recepción (ej: "2/5 cargados")
 - Bloqueo de carga duplicada de dispositivos
@@ -208,7 +218,11 @@ Los roles se gestionan desde la página **Usuarios** (solo visible para Superadm
 - Editar y eliminar categorías
 
 ### Proveedores
-- ABM completo con búsqueda
+- ABM completo con búsqueda, CUIT, teléfono y email
+
+### Pantallas chicas
+- En celulares y tablets (menos de 1200 px de ancho) el menú se abre con el botón ☰
+- Filtros y formularios se acomodan en una columna; las tablas se desplazan de costado en lugar de cortarse
 
 ### Usuarios
 - Crear usuarios con cualquiera de los 4 roles
@@ -262,6 +276,12 @@ Y para roles, usuarios, tags, MAC y componentes (crea además usuarios de prueba
 
 ```bash
 node scripts/verificar-modelo.mjs admin@inventario.local 'Admin1234!'
+```
+
+Y para movimientos, entregas múltiples, ampliaciones, exportación y permisos del técnico:
+
+```bash
+node scripts/verificar-fase3.mjs admin@inventario.local 'Admin1234!'
 ```
 
 ---
@@ -326,21 +346,22 @@ Si necesitás cambiar la URL del backend, modificá `frontend/src/api/axios.ts` 
 
 CAMBIAR AHORA
 
--MOSTRAR EL COLOR LA VARIANTE EN LA ORDEN O/C
+-[HECHO] MOSTRAR EL COLOR LA VARIANTE EN LA ORDEN O/C
 -[HECHO] NOTA GENERAL DEL DISPOSITIVO, Y SE PUEDA MODIFICAR
 -[HECHO] MAC ADDRESS
 -[HECHO] AGREGARLE COMPONENTES A DISPOSITIVOS
--HISTORIA DE MOVIMIENTOS DE PERSONAS (DEPENDENDENCIAS)
--TIENE AMPLIACIION (OC ORIGINAL)
+-[HECHO] HISTORIA DE MOVIMIENTOS DE PERSONAS (DEPENDENDENCIAS)
+-[HECHO] TIENE AMPLIACIION (OC ORIGINAL)
 -[HECHO] cambiar excel para que cargue MAC ADDRESS (opcional)
 -[HECHO] CARTEL ERROR AL REPETIR SERIALNUMBER
--AL EXPORTAR TRAER TODOS LOS DETALLES DEL DISPOSITIVO (COMPONENTES, MAC, ETC) (Sin historial)
--TELEFONO EN PROVEEDOR
--AGREGAR BOTON CREAR PROVEDOR, MODELO, CARTUCHO EN OC
--BOTON ASIGNAR EN CONSUMIBLES CON LA OPCION DE TRAER TODOS LOS MODELOS POR BUSQUEDA Y TE DEJE AGREGAR MAS DE UNO POR ASIGNACION
+-[HECHO] AL EXPORTAR TRAER TODOS LOS DETALLES DEL DISPOSITIVO (COMPONENTES, MAC, ETC) (Sin historial)
+-[HECHO] TELEFONO EN PROVEEDOR
+-[HECHO] AGREGAR BOTON CREAR PROVEDOR, MODELO, CARTUCHO EN OC
+-[HECHO] BOTON ASIGNAR EN CONSUMIBLES CON LA OPCION DE TRAER TODOS LOS MODELOS POR BUSQUEDA Y TE DEJE AGREGAR MAS DE UNO POR ASIGNACION
 -[HECHO] ROLES: ADMINISTRADOR(PUEDE cargar dispositivos o consumibles, sin borrar y ajustar stock), Tecnico(Solo asignar), consulta
--Carteles de error cuando hay un cuil o SN duplicados (SN y MAC hechos; falta revisar CUIL)
--SITIO RESPONSIVE
+-[HECHO] Carteles de error cuando hay un cuil o SN duplicados
+-[HECHO] SITIO RESPONSIVE
+-[HECHO] MOVIMIENTOS: VER, FILTRAR POR FECHA Y TIPO, TOTALES Y EXPORTAR
 
 
 

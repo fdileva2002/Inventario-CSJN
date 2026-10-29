@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -9,9 +10,16 @@ import { UpdateDeviceDto } from './dto/update-device.dto';
 import { CreateSmartDeviceDto } from './dto/create-smart-device.dto';
 import { FindDevicesDto } from './dto/find-devices.dto';
 import { ChangeDeviceStatusDto } from './dto/change-devices-status.dto';
-import { DeviceMovementType } from '@prisma/client';
+import { DeviceMovementType, UserRole } from '@prisma/client';
+import { getCurrentUserRole } from '../common/request-context';
+import { CARGA } from '../auth/roles';
 import { nextDeviceTag, tagPrefixFor } from './device-tag';
 import { normalizeMac } from './mac-address';
+
+const TECHNICIAN_EDITABLE_FIELDS = ['hostname', 'location', 'notes'];
+
+// Tope de equipos por exportación: con más conviene filtrar.
+const DEVICE_EXPORT_LIMIT = 20000;
 
 @Injectable()
 export class DevicesService {
@@ -64,7 +72,73 @@ export class DevicesService {
     }
   }
 
- async findAll(filters: FindDevicesDto) {
+  async findAll(filters: FindDevicesDto) {
+    const where = this.buildWhere(filters);
+    const page = filters.page ?? 0;
+    const limit = filters.limit ?? 40;
+
+    const [devices, total] = await Promise.all([
+      this.prisma.device.findMany({
+        where,
+        include: {
+          category: true,
+          model: true,
+          status: true,
+          supplier: true,
+          purchaseOrder: true,
+          assignments: {
+            where: { returnedAt: null },
+            include: {
+              person: true,
+              department: true,
+            },
+          },
+        },
+        orderBy: { tag: 'asc' },
+        skip: page * limit,
+        take: limit,
+      }),
+      this.prisma.device.count({ where }),
+    ]);
+
+    return {
+      data: devices,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
+  }
+
+  // Todo el resultado de la búsqueda (sin paginar) con los datos completos, para Excel.
+  async export(filters: FindDevicesDto) {
+    const where = this.buildWhere(filters);
+    const total = await this.prisma.device.count({ where });
+    if (total > DEVICE_EXPORT_LIMIT) {
+      throw new BadRequestException(
+        `La búsqueda tiene ${total} equipos; el máximo para exportar es ${DEVICE_EXPORT_LIMIT}. Agregá filtros.`,
+      );
+    }
+
+    return this.prisma.device.findMany({
+      where,
+      include: {
+        category: true,
+        model: true,
+        status: true,
+        supplier: true,
+        purchaseOrder: { select: { id: true, number: true } },
+        assignments: {
+          where: { returnedAt: null },
+          include: { person: true, department: true },
+        },
+        components: { where: { status: 'INSTALADO' }, orderBy: { type: 'asc' } },
+      },
+      orderBy: { tag: 'asc' },
+    });
+  }
+
+  private buildWhere(filters: FindDevicesDto) {
     const where: any = {};
 
     if (filters.search) {
@@ -129,41 +203,11 @@ export class DevicesService {
       };
     }
 
-   
-    const page = filters.page ?? 0;
-    const limit = filters.limit ?? 40;
+    if (filters.location?.trim()) {
+      where.location = { contains: filters.location.trim(), mode: 'insensitive' };
+    }
 
-    const [devices, total] = await Promise.all([
-      this.prisma.device.findMany({
-        where,
-        include: {
-          category: true,
-          model: true,
-          status: true,
-          supplier: true,
-          purchaseOrder: true,
-          assignments: {
-            where: { returnedAt: null },
-            include: {
-              person: true,
-              department: true,
-            },
-          },
-        },
-        orderBy: { tag: 'asc' },
-        skip: page * limit,
-        take: limit,
-      }),
-      this.prisma.device.count({ where }),
-    ]);
-
-    return {
-      data: devices,
-      total,
-      page,
-      limit,
-      totalPages: Math.ceil(total / limit),
-    };
+    return where;
   }
 
   async findOne(id: number) {
@@ -207,6 +251,18 @@ export class DevicesService {
   // que validan las reglas y dejan el movimiento. statusCode y categoryName
   // vienen del formulario pero no son columnas.
   const { statusId, statusCode, categoryName, ...editableFields } = updateDeviceDto;
+
+  // El técnico (ASIGNACION) solo corrige los datos de campo; el resto es CARGA.
+  if (!CARGA.includes(getCurrentUserRole() as UserRole)) {
+    const forbidden = Object.keys(editableFields).filter(
+      (field) =>
+        !TECHNICIAN_EDITABLE_FIELDS.includes(field) &&
+        (editableFields as Record<string, unknown>)[field] !== undefined,
+    );
+    if (forbidden.length > 0) {
+      throw new ForbiddenException('Solo podés editar hostname, ubicación y notas');
+    }
+  }
 
   if (statusId !== undefined && statusId !== existingDevice.statusId) {
     throw new BadRequestException(
