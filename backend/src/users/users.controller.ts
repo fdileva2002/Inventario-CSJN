@@ -15,9 +15,10 @@ import { UpdateUserPasswordDto } from './dto/update-user-password.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
+import { LECTURA, TOTAL } from '../auth/roles';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles('EDICION')
+@Roles(...TOTAL)
 @Controller('users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
@@ -45,6 +46,8 @@ export class UsersController {
     return this.usersService.update(id, updateUserDto);
   }
 
+  // Cualquier usuario cambia su propia contraseña; el servicio verifica que sea la suya.
+  @Roles(...LECTURA)
   @Patch(':id/password')
   updatePassword(
     @Param('id', ParseIntPipe) id: number,
@@ -53,11 +56,8 @@ export class UsersController {
     return this.usersService.updatePassword(id, updateUserPasswordDto);
   }
 
-  // En users.controller.ts, el endpoint de reset debe tener:
-  @Roles('ADMIN')
-  @UseGuards(JwtAuthGuard, RolesGuard)
   @Patch(':id/reset-password')
-  resetPassword(@Param('id') id: string) {
-    return this.usersService.resetPassword(+id);
+  resetPassword(@Param('id', ParseIntPipe) id: number) {
+    return this.usersService.resetPassword(id);
   }
 }

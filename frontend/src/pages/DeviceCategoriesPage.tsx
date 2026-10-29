@@ -21,8 +21,8 @@ import {
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import { api } from '../api/axios';
+import { getPermissions } from '../auth/permissions';
 import AppLayout from '../components/AppLayout';
-import { getUser } from '../auth/auth.storage';
 
 type DeviceModel = {
   id: number;
@@ -38,8 +38,7 @@ type DeviceCategory = {
 };
 
 export default function DeviceCategoriesPage() {
-  const user = getUser();
-  const canEdit = user?.role === 'EDICION';
+  const { canLoad: canEdit, canDelete } = getPermissions();
 
   const [categories, setCategories] = useState<DeviceCategory[]>([]);
   const [expandedId, setExpandedId] = useState<number | null>(null);
@@ -281,18 +280,20 @@ export default function DeviceCategoriesPage() {
                         >
                           Editar
                         </Button>
-                        <Button
-                          size="small"
-                          variant="outlined"
-                          color="error"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedCategory(category);
-                            setOpenDeleteCategory(true);
-                          }}
-                        >
-                          Eliminar
-                        </Button>
+                        {canDelete && (
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            color="error"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedCategory(category);
+                              setOpenDeleteCategory(true);
+                            }}
+                          >
+                            Eliminar
+                          </Button>
+                        )}
                       </Box>
                     </TableCell>
                   )}
@@ -312,7 +313,7 @@ export default function DeviceCategoriesPage() {
                               <TableRow>
                                 <TableCell>Marca</TableCell>
                                 <TableCell>Modelo</TableCell>
-                                {canEdit && <TableCell>Acciones</TableCell>}
+                                {canDelete && <TableCell>Acciones</TableCell>}
                               </TableRow>
                             </TableHead>
                             <TableBody>
@@ -320,19 +321,21 @@ export default function DeviceCategoriesPage() {
                                 <TableRow key={model.id}>
                                   <TableCell>{model.brand}</TableCell>
                                   <TableCell>{model.model}</TableCell>
-                                  {canEdit && (
+                                  {canDelete && (
                                     <TableCell>
-                                      <Button
-                                        size="small"
-                                        variant="outlined"
-                                        color="error"
-                                        onClick={() => {
-                                          setSelectedModel(model);
-                                          setOpenDeleteModel(true);
-                                        }}
-                                      >
-                                        Eliminar
-                                      </Button>
+                                      {canDelete && (
+                                        <Button
+                                          size="small"
+                                          variant="outlined"
+                                          color="error"
+                                          onClick={() => {
+                                            setSelectedModel(model);
+                                            setOpenDeleteModel(true);
+                                          }}
+                                        >
+                                          Eliminar
+                                        </Button>
+                                      )}
                                     </TableCell>
                                   )}
                                 </TableRow>
@@ -458,9 +461,11 @@ export default function DeviceCategoriesPage() {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setOpenDeleteModel(false)}>Cancelar</Button>
-          <Button variant="contained" color="error" onClick={handleDeleteModel}>
-            Eliminar
-          </Button>
+          {canDelete && (
+            <Button variant="contained" color="error" onClick={handleDeleteModel}>
+              Eliminar
+            </Button>
+          )}
         </DialogActions>
       </Dialog>
 
@@ -513,9 +518,11 @@ export default function DeviceCategoriesPage() {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setOpenDeleteCategory(false)}>Cancelar</Button>
-          <Button variant="contained" color="error" onClick={handleDeleteCategory}>
-            Eliminar
-          </Button>
+          {canDelete && (
+            <Button variant="contained" color="error" onClick={handleDeleteCategory}>
+              Eliminar
+            </Button>
+          )}
         </DialogActions>
       </Dialog>
     </AppLayout>

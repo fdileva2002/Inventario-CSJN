@@ -10,6 +10,10 @@ export class CreateSmartDeviceDto {
 
   @IsOptional()
   @IsString()
+  macAddress?: string;
+
+  @IsOptional()
+  @IsString()
   location?: string;
 
   @IsOptional()

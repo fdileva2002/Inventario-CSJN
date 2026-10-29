@@ -17,10 +17,12 @@ import {
 import { useNavigate, useLocation } from 'react-router-dom';
 import { api } from '../api/axios';
 import { getUser, removeToken } from '../auth/auth.storage';
+import { getPermissions, ROLE_LABELS } from '../auth/permissions';
 
 const menuItems = [
   { label: 'Dashboard', path: '/dashboard' },
   { label: 'Dispositivos', path: '/devices' },
+  { label: 'Componentes', path: '/components' },
   { label: 'Cartuchos', path: '/cartuchos' },
   { label: 'Otros insumos', path: '/otros-consumibles' },
   { label: 'Personas', path: '/people' },
@@ -34,6 +36,7 @@ export default function Sidebar() {
   const navigate = useNavigate();
   const location = useLocation();
   const user = getUser();
+  const { role, canManageUsers } = getPermissions();
 
   const [openChangePassword, setOpenChangePassword] = useState(false);
   const [passwordForm, setPasswordForm] = useState({
@@ -98,7 +101,7 @@ export default function Sidebar() {
           </ListItemButton>
         ))}
 
-        {user?.role === 'EDICION' && (
+        {canManageUsers && (
           <>
             <Divider sx={{ my: 1 }} />
             <ListItemButton onClick={() => navigate('/users')}>
@@ -113,7 +116,7 @@ export default function Sidebar() {
           {user?.name}
         </Typography>
         <Typography variant="caption" sx={{ display: 'block', mb: 1, color: 'text.secondary' }}>
-          {user?.role}
+          {role ? ROLE_LABELS[role] : ''}
         </Typography>
         <Button
           size="small"

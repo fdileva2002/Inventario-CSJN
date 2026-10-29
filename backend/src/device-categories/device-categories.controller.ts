@@ -15,6 +15,7 @@ import { UpdateDeviceCategoryDto } from './dto/update-device-category.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
+import { LECTURA, CARGA, TOTAL } from '../auth/roles';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('device-categories')
@@ -23,25 +24,25 @@ export class DeviceCategoriesController {
     private readonly deviceCategoriesService: DeviceCategoriesService,
   ) {}
 
-  @Roles('EDICION')
+  @Roles(...CARGA)
   @Post()
   create(@Body() createDeviceCategoryDto: CreateDeviceCategoryDto) {
     return this.deviceCategoriesService.create(createDeviceCategoryDto);
   }
 
-  @Roles('EDICION', 'CONSULTA')
+  @Roles(...LECTURA)
   @Get()
   findAll() {
     return this.deviceCategoriesService.findAll();
   }
 
-  @Roles('EDICION', 'CONSULTA')
+  @Roles(...LECTURA)
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number) {
     return this.deviceCategoriesService.findOne(id);
   }
 
-  @Roles('EDICION')
+  @Roles(...CARGA)
   @Patch(':id')
   update(
     @Param('id', ParseIntPipe) id: number,
@@ -50,7 +51,7 @@ export class DeviceCategoriesController {
     return this.deviceCategoriesService.update(id, updateDeviceCategoryDto);
   }
 
-  @Roles('EDICION')
+  @Roles(...TOTAL)
   @Delete(':id')
   remove(@Param('id', ParseIntPipe) id: number) {
     return this.deviceCategoriesService.remove(id);

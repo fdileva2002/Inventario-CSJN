@@ -13,6 +13,7 @@ import { CreateConsumableMovementDto } from './dto/create-consumable-movement.dt
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
+import { LECTURA, ASIGNACION } from '../auth/roles';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('consumable-movements')
@@ -21,13 +22,13 @@ export class ConsumableMovementsController {
     private readonly consumableMovementsService: ConsumableMovementsService,
   ) {}
 
-  @Roles('EDICION')
+  @Roles(...ASIGNACION)
   @Post()
   create(@Body() createConsumableMovementDto: CreateConsumableMovementDto) {
     return this.consumableMovementsService.create(createConsumableMovementDto);
   }
 
-  @Roles('EDICION', 'CONSULTA')
+  @Roles(...LECTURA)
   @Get()
   findAll(@Query('consumableId') consumableId?: string) {
     return this.consumableMovementsService.findAll(
@@ -35,7 +36,7 @@ export class ConsumableMovementsController {
     );
   }
 
-  @Roles('EDICION', 'CONSULTA')
+  @Roles(...LECTURA)
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number) {
     return this.consumableMovementsService.findOne(id);

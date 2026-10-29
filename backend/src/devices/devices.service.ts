@@ -10,6 +10,8 @@ import { CreateSmartDeviceDto } from './dto/create-smart-device.dto';
 import { FindDevicesDto } from './dto/find-devices.dto';
 import { ChangeDeviceStatusDto } from './dto/change-devices-status.dto';
 import { DeviceMovementType } from '@prisma/client';
+import { nextDeviceTag, tagPrefixFor } from './device-tag';
+import { normalizeMac } from './mac-address';
 
 @Injectable()
 export class DevicesService {
@@ -22,6 +24,7 @@ export class DevicesService {
         data: {
           tag: createDeviceDto.tag,
           serialNumber: createDeviceDto.serialNumber,
+          macAddress: normalizeMac(createDeviceDto.macAddress),
           hostname: createDeviceDto.hostname?.trim(),
           categoryId: createDeviceDto.categoryId,
           modelId: createDeviceDto.modelId,
@@ -57,21 +60,7 @@ export class DevicesService {
       return device;
       });
     } catch (error: any) {
-      if (error.code === 'P2002') {
-        const target = error.meta?.target;
-
-        if (Array.isArray(target) && target.includes('tag')) {
-          throw new BadRequestException('Ya existe un dispositivo con esa etiqueta');
-        }
-
-        if (Array.isArray(target) && target.includes('serialNumber')) {
-          throw new BadRequestException('Ya existe un dispositivo con ese número de serie');
-        }
-
-        throw new BadRequestException('Ya existe un registro duplicado');
-      }
-
-      throw error;
+      this.rethrowDuplicate(error);
     }
   }
 
@@ -82,6 +71,7 @@ export class DevicesService {
       where.OR = [
         { tag: { contains: filters.search, mode: 'insensitive' } },
         { serialNumber: { contains: filters.search, mode: 'insensitive' } },
+        { macAddress: { contains: filters.search, mode: 'insensitive' } },
         { hostname: { contains: filters.search, mode: 'insensitive' } },
         { location: { contains: filters.search, mode: 'insensitive' } },
         { model: { model: { contains: filters.search, mode: 'insensitive' } } },
@@ -240,6 +230,7 @@ export class DevicesService {
         hostname: this.optionalText(updateDeviceDto.hostname),
         location: this.optionalText(updateDeviceDto.location),
         notes: this.optionalText(updateDeviceDto.notes),
+        macAddress: normalizeMac(updateDeviceDto.macAddress),
       },
       include: {
         category: true,
@@ -267,26 +258,8 @@ export class DevicesService {
     return updatedDevice;
     });
   } catch (error: any) {
-    if (error.code === 'P2002') {
-      const target = error.meta?.target;
-
-      if (Array.isArray(target) && target.includes('tag')) {
-        throw new BadRequestException(
-          'Ya existe un dispositivo con esa etiqueta',
-        );
-      }
-
-      if (Array.isArray(target) && target.includes('serialNumber')) {
-        throw new BadRequestException(
-          'Ya existe un dispositivo con ese número de serie',
-        );
-      }
-
-      throw new BadRequestException('Ya existe un registro duplicado');
-    }
-
-    throw error;
-    }
+    this.rethrowDuplicate(error);
+  }
   }
 
   async remove(id: number) {
@@ -334,6 +307,7 @@ export class DevicesService {
   async createSmart(createSmartDeviceDto: CreateSmartDeviceDto) {
   const { modelId, serialNumber, hostname, location, statusCode, notes } =
     createSmartDeviceDto;
+  const macAddress = normalizeMac(createSmartDeviceDto.macAddress);
 
   const model = await this.prisma.deviceModel.findUnique({
     where: { id: modelId },
@@ -356,16 +330,17 @@ export class DevicesService {
     throw new NotFoundException('El estado indicado no existe');
   }
 
-  const prefix = this.getTagPrefixByCategory(model.category.name, model.category.code);
+  const prefix = tagPrefixFor(model.category);
 
   try {
     const device = await this.prisma.transaction(async (tx) => {
-      const tag = await this.generateNextTag(tx, prefix);
+      const tag = await nextDeviceTag(tx, prefix);
 
       const createdDevice = await tx.device.create({
         data: {
           tag,
           serialNumber: serialNumber.trim(),
+          macAddress,
           hostname: hostname?.trim(),
           categoryId: model.categoryId,
           modelId: model.id,
@@ -398,21 +373,7 @@ export class DevicesService {
 
     return device;
   } catch (error: any) {
-    if (error.code === 'P2002') {
-      const target = error.meta?.target;
-
-      if (Array.isArray(target) && target.includes('tag')) {
-        throw new BadRequestException('Ya existe un dispositivo con esa etiqueta');
-      }
-
-      if (Array.isArray(target) && target.includes('serialNumber')) {
-        throw new BadRequestException('Ya existe un dispositivo con ese número de serie');
-      }
-
-      throw new BadRequestException('Ya existe un registro duplicado');
-    }
-
-    throw error;
+    this.rethrowDuplicate(error);
   }
 }
 
@@ -421,47 +382,25 @@ export class DevicesService {
     return value.trim() || null;
   }
 
-  private getTagPrefixByCategory(categoryName: string, categoryCode?: string | null) {
-    if (categoryCode) return categoryCode;
+  // Traduce violaciones de unicidad a un mensaje que diga qué dato está repetido.
+  private rethrowDuplicate(error: any): never {
+    if (error?.code === 'P2002') {
+      const target: string[] = Array.isArray(error.meta?.target) ? error.meta.target : [];
 
-    const prefixes: Record<string, string> = {
-      Desktop: 'PC',
-      Notebook: 'NBK',
-      Monitor: 'MON',
-      Impresora: 'IMP',
-      Token: 'TKN',
-      'All-in-one': 'AIO',
-      'Camara Web': 'CAM',
-      DVD: 'DVD',
-      Escaner: 'SCN',
-      'Colector de datos': 'COL',
-    };
+      if (target.includes('tag')) {
+        throw new BadRequestException('Ya existe un dispositivo con esa etiqueta');
+      }
+      if (target.includes('serialNumber')) {
+        throw new BadRequestException('Ya existe un dispositivo con ese número de serie');
+      }
+      if (target.includes('macAddress')) {
+        throw new BadRequestException('Ya existe un dispositivo con esa MAC address');
+      }
+      throw new BadRequestException('Ya existe un registro duplicado');
+    }
 
-    return prefixes[categoryName] ?? 'DEV';
+    throw error;
   }
-
-private async generateNextTag(tx: any, prefix: string) {
-  const lastDevice = await tx.device.findFirst({
-    where: {
-      tag: {
-        startsWith: prefix,
-      },
-    },
-    orderBy: {
-      tag: 'desc',
-    },
-  });
-
-  if (!lastDevice) {
-    return `${prefix}0001`;
-  }
-
-  const numericPart = lastDevice.tag.slice(prefix.length);
-  const lastNumber = Number.parseInt(numericPart, 10);
-  const nextNumber = Number.isNaN(lastNumber) ? 1 : lastNumber + 1;
-
-  return `${prefix}${nextNumber.toString().padStart(4, '0')}`;
- }
  
  async changeStatus(id: number, dto: ChangeDeviceStatusDto) {
     const device = await this.prisma.device.findUnique({

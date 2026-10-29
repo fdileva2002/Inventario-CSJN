@@ -15,6 +15,10 @@ export class CreateDeviceDto {
   @IsNotEmpty()
   serialNumber!: string;
 
+  @IsOptional()
+  @IsString()
+  macAddress?: string;
+
   @IsInt()
   categoryId!: number;
 

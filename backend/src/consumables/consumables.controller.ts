@@ -17,31 +17,32 @@ import { FindConsumablesDto } from './dto/find-consumables.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
+import { LECTURA, CARGA, TOTAL } from '../auth/roles';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('consumables')
 export class ConsumablesController {
   constructor(private readonly consumablesService: ConsumablesService) {}
 
-  @Roles('EDICION')
+  @Roles(...CARGA)
   @Post()
   create(@Body() createConsumableDto: CreateConsumableDto) {
     return this.consumablesService.create(createConsumableDto);
   }
 
-  @Roles('EDICION', 'CONSULTA')
+  @Roles(...LECTURA)
   @Get()
   findAll(@Query() filters: FindConsumablesDto) {
     return this.consumablesService.findAll(filters);
   }
 
-  @Roles('EDICION', 'CONSULTA')
+  @Roles(...LECTURA)
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number) {
     return this.consumablesService.findOne(id);
   }
 
-  @Roles('EDICION')
+  @Roles(...CARGA)
   @Patch(':id')
   update(
     @Param('id', ParseIntPipe) id: number,
@@ -50,7 +51,7 @@ export class ConsumablesController {
     return this.consumablesService.update(id, updateConsumableDto);
   }
 
-  @Roles('EDICION')
+  @Roles(...TOTAL)
   @Delete(':id')
   remove(@Param('id', ParseIntPipe) id: number) {
     return this.consumablesService.remove(id);

@@ -16,31 +16,32 @@ import { UpdateDeviceModelDto } from './dto/update-device-model.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
+import { LECTURA, CARGA, TOTAL } from '../auth/roles';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('device-models')
 export class DeviceModelsController {
   constructor(private readonly deviceModelsService: DeviceModelsService) {}
 
-  @Roles('EDICION')
+  @Roles(...CARGA)
   @Post()
   create(@Body() createDeviceModelDto: CreateDeviceModelDto) {
     return this.deviceModelsService.create(createDeviceModelDto);
   }
 
-  @Roles('EDICION', 'CONSULTA')
+  @Roles(...LECTURA)
   @Get()
   findAll(@Query('search') search?: string) {
     return this.deviceModelsService.findAll(search);
   }
 
-  @Roles('EDICION', 'CONSULTA')
+  @Roles(...LECTURA)
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number) {
     return this.deviceModelsService.findOne(id);
   }
 
-  @Roles('EDICION')
+  @Roles(...CARGA)
   @Patch(':id')
   update(
     @Param('id', ParseIntPipe) id: number,
@@ -49,7 +50,7 @@ export class DeviceModelsController {
     return this.deviceModelsService.update(id, updateDeviceModelDto);
   }
 
-  @Roles('EDICION')
+  @Roles(...TOTAL)
   @Delete(':id')
   remove(@Param('id', ParseIntPipe) id: number) {
     return this.deviceModelsService.remove(id);

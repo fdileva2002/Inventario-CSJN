@@ -1,3 +1,4 @@
+import { UserRole } from '@prisma/client';
 import { IsBoolean, IsEmail, IsIn, IsOptional, IsString } from 'class-validator';
 
 export class UpdateUserDto {
@@ -11,8 +12,8 @@ export class UpdateUserDto {
 
   @IsOptional()
   @IsString()
-  @IsIn(['EDICION', 'CONSULTA'])
-  role?: 'EDICION' | 'CONSULTA';
+  @IsIn(['SUPERADMIN', 'ADMINISTRADOR', 'TECNICO', 'CONSULTA'])
+  role?: UserRole;
 
   @IsOptional()
   @IsBoolean()

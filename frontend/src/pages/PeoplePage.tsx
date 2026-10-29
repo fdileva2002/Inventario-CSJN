@@ -5,8 +5,8 @@ import {
   TextField, Typography, MenuItem, TablePagination,
 } from '@mui/material';
 import { api } from '../api/axios';
+import { getPermissions } from '../auth/permissions';
 import AppLayout from '../components/AppLayout';
-import { getUser } from '../auth/auth.storage';
 import * as XLSX from 'xlsx';
 
 type Person = {
@@ -49,8 +49,7 @@ type ConsumableAssignment = {
 };
 
 export default function PeoplePage() {
-  const user = getUser();
-  const canEdit = user?.role === 'EDICION';
+  const { canLoad: canEdit, canDelete } = getPermissions();
 
   const [people, setPeople] = useState<Person[]>([]);
   const [total, setTotal] = useState(0);
@@ -271,18 +270,20 @@ export default function PeoplePage() {
                       >
                         Editar
                       </Button>
-                      <Button
-                        size="small"
-                        color="error"
-                        variant="outlined"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedPerson(person);
-                          setOpenDelete(true);
-                        }}
-                      >
-                        Eliminar
-                      </Button>
+                      {canDelete && (
+                        <Button
+                          size="small"
+                          color="error"
+                          variant="outlined"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedPerson(person);
+                            setOpenDelete(true);
+                          }}
+                        >
+                          Eliminar
+                        </Button>
+                      )}
                     </Box>
                   </TableCell>
                 )}
@@ -409,7 +410,9 @@ export default function PeoplePage() {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setOpenDelete(false)}>Cancelar</Button>
-          <Button variant="contained" color="error" onClick={handleDeletePerson}>Eliminar</Button>
+          {canDelete && (
+            <Button variant="contained" color="error" onClick={handleDeletePerson}>Eliminar</Button>
+          )}
         </DialogActions>
       </Dialog>
 

@@ -3,6 +3,7 @@ import { APP_INTERCEPTOR } from '@nestjs/core';
 import { PrismaModule } from './prisma/prisma.module';
 import { RequestContextInterceptor } from './common/request-context';
 import { AuditModule } from './audit/audit.module';
+import { ComponentsModule } from './components/components.module';
 import { PeopleModule } from './people/people.module';
 import { DevicesModule } from './devices/devices.module';
 import { AssignmentsModule } from './assignments/assignments.module';
@@ -40,6 +41,7 @@ import { DepartmentsModule } from './departments/departments.module';
     UsersModule,
     DepartmentsModule,
     AuditModule,
+    ComponentsModule,
   ],
   providers: [{ provide: APP_INTERCEPTOR, useClass: RequestContextInterceptor }],
 })

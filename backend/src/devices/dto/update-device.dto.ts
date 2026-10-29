@@ -15,6 +15,10 @@ export class UpdateDeviceDto {
   serialNumber?: string;
 
   @IsOptional()
+  @IsString()
+  macAddress?: string;
+
+  @IsOptional()
   @IsInt()
   categoryId?: number;
 

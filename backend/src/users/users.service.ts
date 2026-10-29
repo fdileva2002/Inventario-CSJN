@@ -1,10 +1,13 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
+import { randomInt } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
+import { getCurrentUserId } from '../common/request-context';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UpdateUserPasswordDto } from './dto/update-user-password.dto';
@@ -58,7 +61,26 @@ export class UsersService {
   }
 
   async update(id: number, updateUserDto: UpdateUserDto) {
-    await this.findExistingUser(id);
+    const user = await this.findExistingUser(id);
+
+    // Siempre tiene que quedar al menos un Superadmin activo que pueda administrar usuarios.
+    const losesSuperadmin =
+      user.role === 'SUPERADMIN' &&
+      user.active &&
+      ((updateUserDto.role !== undefined && updateUserDto.role !== 'SUPERADMIN') ||
+        updateUserDto.active === false);
+
+    if (losesSuperadmin) {
+      const activeSuperadmins = await this.prisma.user.count({
+        where: { role: 'SUPERADMIN', active: true },
+      });
+
+      if (activeSuperadmins <= 1) {
+        throw new BadRequestException(
+          'No se puede quitar el rol ni desactivar al último Superadmin activo',
+        );
+      }
+    }
 
     if (updateUserDto.email) {
       const existingUserWithEmail = await this.prisma.user.findFirst({
@@ -92,18 +114,21 @@ export class UsersService {
     return this.sanitizeUser(updatedUser);
   }
 
+  // Solo la propia. Para otros usuarios está resetPassword (Superadmin).
   async updatePassword(id: number, updateUserPasswordDto: UpdateUserPasswordDto) {
+    if (id !== getCurrentUserId()) {
+      throw new ForbiddenException('Solo podés cambiar tu propia contraseña');
+    }
+
     const user = await this.findExistingUser(id);
 
-    if (updateUserPasswordDto.currentPassword) {
-      const passwordOk = await bcrypt.compare(
-        updateUserPasswordDto.currentPassword,
-        user.passwordHash, 
-      );
+    const passwordOk = await bcrypt.compare(
+      updateUserPasswordDto.currentPassword,
+      user.passwordHash,
+    );
 
-      if (!passwordOk) {
-        throw new BadRequestException('La contraseña actual es incorrecta');
-      }
+    if (!passwordOk) {
+      throw new BadRequestException('La contraseña actual es incorrecta');
     }
 
     const passwordHash = await bcrypt.hash(updateUserPasswordDto.password, 10);
@@ -138,17 +163,24 @@ export class UsersService {
 
   async resetPassword(id: number) {
     await this.findExistingUser(id);
-    
-    const defaultPassword = 'Cdl%4884';
-    const passwordHash = await bcrypt.hash(defaultPassword, 10);
-    
+
+    // Temporal aleatoria por reseteo (antes era una fija igual para todos).
+    // Sin caracteres ambiguos (0/O, 1/l/I) para dictarla sin errores.
+    const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+    const temporaryPassword = Array.from(
+      { length: 10 },
+      () => alphabet[randomInt(alphabet.length)],
+    ).join('');
+    const passwordHash = await bcrypt.hash(temporaryPassword, 10);
+
     await this.prisma.transaction((tx) => tx.user.update({
       where: { id },
       data: { passwordHash },
     }));
-  
+
     return {
-      message: `Contraseña reseteada. Nueva contraseña temporal: ${defaultPassword}`,
+      message: `Contraseña reseteada. Nueva contraseña temporal: ${temporaryPassword}`,
+      temporaryPassword,
     };
   }
 }

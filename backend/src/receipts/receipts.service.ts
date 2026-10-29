@@ -11,6 +11,8 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { getCurrentUserId } from '../common/request-context';
 import { applyStockMovement } from '../consumables/consumable-stock';
+import { nextDeviceTag, tagPrefixFor } from '../devices/device-tag';
+import { normalizeMac } from '../devices/mac-address';
 import { CreateReceiptDto } from './dto/create-receipt.dto';
 import { UpdateReceiptDto } from './dto/update-receipt.dto';
 import { CreateDevicesFromReceiptDto } from './dto/create-devices-from-receipt.dto';
@@ -527,7 +529,15 @@ export class ReceiptsService {
     );
   }
 
-  return this.prisma.transaction(async (tx) => {
+  const macs = createDevicesFromReceiptDto.devices.map((d) => normalizeMac(d.macAddress) ?? null);
+  const presentMacs = macs.filter((mac): mac is string => mac !== null);
+
+  if (new Set(presentMacs).size !== presentMacs.length) {
+    throw new BadRequestException('Hay MAC address repetidas dentro de la misma carga');
+  }
+
+  try {
+  return await this.prisma.transaction(async (tx) => {
     const createdDevices: any[] = [];
     let serialIndex = 0;
 
@@ -540,17 +550,17 @@ export class ReceiptsService {
         );
       }
 
-      const category = deviceModel.category;
-      const prefix = this.getTagPrefixByCategory(category.name, category.code);
+      const prefix = tagPrefixFor(deviceModel.category);
 
       for (let i = 0; i < receiptItem.receivedQuantity; i++) {
         const serialNumber = serials[serialIndex];
-        const tag = await this.generateNextTag(tx, prefix);
+        const tag = await nextDeviceTag(tx, prefix);
 
         const device = await tx.device.create({
           data: {
             tag,
             serialNumber,
+            macAddress: macs[serialIndex],
             categoryId: deviceModel.categoryId,
             modelId: deviceModel.id,
             statusId: statusToConfigure.id,
@@ -591,55 +601,19 @@ export class ReceiptsService {
       devices: createdDevices,
     };
   });
- }
-
-   private getTagPrefixByCategory(categoryName: string, categoryCode?: string | null) {
-    // Primero usamos el código de la categoría si existe
-    if (categoryCode) {
-      return categoryCode;
+  } catch (error: any) {
+    // Nombra el dato repetido contra lo ya cargado (la carga entera se revierte).
+    if (error?.code === 'P2002') {
+      const target: string[] = Array.isArray(error.meta?.target) ? error.meta.target : [];
+      if (target.includes('serialNumber')) {
+        throw new BadRequestException('Alguno de los seriales ya está cargado en otro dispositivo. No se cargó ningún equipo.');
+      }
+      if (target.includes('macAddress')) {
+        throw new BadRequestException('Alguna de las MAC address ya está cargada en otro dispositivo. No se cargó ningún equipo.');
+      }
     }
-  
-    // Fallback al mapa hardcodeado
-    const prefixes: Record<string, string> = {
-      Desktop: 'PC',
-      Notebook: 'NBK',
-      Monitor: 'MON',
-      Impresora: 'IMP',
-      Token: 'TKN',
-      'All-in-one': 'AIO',
-      'Camara Web': 'CAM',
-      DVD: 'DVD',
-      Escaner: 'SCN',
-      'Colector de datos': 'COL',
-    };
-  
-    return prefixes[categoryName] ?? 'DEV';
+    throw error;
   }
-
-
-
- private async generateNextTag(tx: PrismaService | any, prefix: string) {
-  const lastDevice = await tx.device.findFirst({
-    where: {
-      tag: {
-        startsWith: prefix,
-      },
-    },
-    orderBy: {
-      tag: 'desc',
-    },
-  });
-
-  if (!lastDevice) {
-    return `${prefix}0001`;
-  }
-
-  const numericPart = lastDevice.tag.slice(prefix.length);
-  const lastNumber = Number.parseInt(numericPart, 10);
-
-  const nextNumber = Number.isNaN(lastNumber) ? 1 : lastNumber + 1;
-
-  return `${prefix}${nextNumber.toString().padStart(4, '0')}`;
  }
 
  async importDevicesFromReceipt(
@@ -662,14 +636,17 @@ export class ReceiptsService {
     throw new BadRequestException('El archivo está vacío');
   }
 
-  // transformar a formato que ya tenés
-  const devices = data.map((row: any) => {
+  // Columnas: serialNumber (obligatoria) y macAddress o MAC (opcional).
+  const devices = data.map((row: any, index: number) => {
     if (!row.serialNumber) {
-      throw new BadRequestException('Falta serialNumber en el Excel');
+      throw new BadRequestException(`Falta serialNumber en la fila ${index + 2} del Excel`);
     }
+
+    const mac = row.macAddress ?? row.MAC ?? row.mac;
 
     return {
       serialNumber: String(row.serialNumber).trim(),
+      macAddress: mac !== undefined && mac !== null ? String(mac).trim() : undefined,
     };
   });
 

@@ -2,6 +2,7 @@ import {
   ArrayMinSize,
   IsArray,
   IsNotEmpty,
+  IsOptional,
   IsString,
   ValidateNested,
 } from 'class-validator';
@@ -11,6 +12,10 @@ class ReceiptDeviceInputDto {
   @IsString()
   @IsNotEmpty()
   serialNumber!: string;
+
+  @IsOptional()
+  @IsString()
+  macAddress?: string;
 }
 
 export class CreateDevicesFromReceiptDto {

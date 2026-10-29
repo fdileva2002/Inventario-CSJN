@@ -19,37 +19,38 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
 import { ChangeDeviceStatusDto } from './dto/change-devices-status.dto';
+import { LECTURA, CARGA, TOTAL } from '../auth/roles';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('devices')
 export class DevicesController {
   constructor(private readonly devicesService: DevicesService) {}
 
-  @Roles('EDICION')
+  @Roles(...CARGA)
   @Post()
   create(@Body() createDeviceDto: CreateDeviceDto) {
     return this.devicesService.create(createDeviceDto);
   }
 
-  @Roles('EDICION', 'CONSULTA')
+  @Roles(...LECTURA)
   @Get()
   findAll(@Query() filters: FindDevicesDto) {
     return this.devicesService.findAll(filters);
   }
 
-  @Roles('EDICION', 'CONSULTA')
+  @Roles(...LECTURA)
   @Get(':id/movements')
   findMovements(@Param('id', ParseIntPipe) id: number) {
     return this.devicesService.findMovements(id);
   }
 
-  @Roles('EDICION', 'CONSULTA')
+  @Roles(...LECTURA)
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number) {
     return this.devicesService.findOne(id);
   }
 
-  @Roles('EDICION')
+  @Roles(...CARGA)
   @Patch(':id')
   update(
     @Param('id', ParseIntPipe) id: number,
@@ -58,19 +59,19 @@ export class DevicesController {
     return this.devicesService.update(id, updateDeviceDto);
   }
 
-  @Roles('EDICION')
+  @Roles(...TOTAL)
   @Delete(':id')
   remove(@Param('id', ParseIntPipe) id: number) {
     return this.devicesService.remove(id);
   }
   
-  @Roles('EDICION')
+  @Roles(...CARGA)
   @Post('manual-smart')
   createSmart(@Body() createSmartDeviceDto: CreateSmartDeviceDto) {
     return this.devicesService.createSmart(createSmartDeviceDto);
   }
 
-  @Roles('EDICION')
+  @Roles(...CARGA)
   @Patch(':id/status')
   changeStatus(
     @Param('id', ParseIntPipe) id: number,

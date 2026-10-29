@@ -19,6 +19,7 @@ import { CreateDevicesFromReceiptDto } from './dto/create-devices-from-receipt.d
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
+import { LECTURA, CARGA } from '../auth/roles';
 
 
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -26,13 +27,13 @@ import { Roles } from '../auth/roles.decorator';
 export class ReceiptsController {
   constructor(private readonly receiptsService: ReceiptsService) {}
 
-  @Roles('EDICION', 'CONSULTA')
+  @Roles(...CARGA)
   @Post()
   create(@Body() createReceiptDto: CreateReceiptDto) {
     return this.receiptsService.create(createReceiptDto);
   }
 
-  @Roles('EDICION')
+  @Roles(...LECTURA)
   @Get()
   findAll(@Query('purchaseOrderId') purchaseOrderId?: string) {
     return this.receiptsService.findAll(
@@ -40,13 +41,13 @@ export class ReceiptsController {
     );
   }
 
-  @Roles('EDICION')
+  @Roles(...LECTURA)
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number) {
     return this.receiptsService.findOne(id);
   }
 
-  @Roles('EDICION', 'CONSULTA')
+  @Roles(...CARGA)
   @Patch(':id')
   update(
     @Param('id', ParseIntPipe) id: number,
@@ -55,7 +56,7 @@ export class ReceiptsController {
     return this.receiptsService.update(id, updateReceiptDto);
   }
 
-  @Roles('EDICION', 'CONSULTA')
+  @Roles(...CARGA)
   @Post(':id/devices')
   createDevicesFromReceipt(
     @Param('id', ParseIntPipe) id: number,
@@ -67,7 +68,7 @@ export class ReceiptsController {
     );
   }
 
-  @Roles('EDICION', 'CONSULTA')
+  @Roles(...CARGA)
   @Post(':id/devices/import')
   @UseInterceptors(FileInterceptor('file'))
   importDevicesFromReceipt(
