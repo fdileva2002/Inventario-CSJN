@@ -20,12 +20,15 @@ import {
 import { api } from '../api/axios';
 import AppLayout from '../components/AppLayout';
 import { getUser } from '../auth/auth.storage';
+import { ROLE_DESCRIPTIONS, ROLE_LABELS, type Role } from '../auth/permissions';
+
+const ROLES = Object.keys(ROLE_LABELS) as Role[];
 
 type User = {
   id: number;
   name: string;
   email: string;
-  role: string;
+  role: Role;
   active: boolean;
 };
 
@@ -143,8 +146,8 @@ export default function UsersPage() {
                 <TableCell>{user.email}</TableCell>
                 <TableCell>
                   <Chip
-                    label={user.role === 'EDICION' ? 'Edición' : 'Consulta'}
-                    color={user.role === 'EDICION' ? 'primary' : 'default'}
+                    label={ROLE_LABELS[user.role] ?? user.role}
+                    color={user.role === 'SUPERADMIN' ? 'primary' : user.role === 'CONSULTA' ? 'default' : 'info'}
                     size="small"
                   />
                 </TableCell>
@@ -231,8 +234,9 @@ export default function UsersPage() {
             value={newUser.role}
             onChange={(e) => setNewUser({ ...newUser, role: e.target.value })}
           >
-            <MenuItem value="EDICION">Edición</MenuItem>
-            <MenuItem value="CONSULTA">Consulta</MenuItem>
+            {ROLES.map((role) => (
+              <MenuItem key={role} value={role}>{ROLE_LABELS[role]}</MenuItem>
+            ))}
           </TextField>
           {createError && (
             <Typography color="error" variant="body2" sx={{ mt: 1 }}>
@@ -257,7 +261,7 @@ export default function UsersPage() {
         <DialogTitle>Cambiar rol — {selectedUser?.name}</DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Rol actual: <strong>{selectedUser?.role === 'EDICION' ? 'Edición' : 'Consulta'}</strong>
+            Rol actual: <strong>{selectedUser ? ROLE_LABELS[selectedUser.role] : ''}</strong>
           </Typography>
           <TextField
             select
@@ -267,8 +271,11 @@ export default function UsersPage() {
             value={newRole}
             onChange={(e) => setNewRole(e.target.value)}
           >
-            <MenuItem value="EDICION">Edición — puede crear, editar y eliminar</MenuItem>
-            <MenuItem value="CONSULTA">Consulta — solo puede ver</MenuItem>
+            {ROLES.map((role) => (
+              <MenuItem key={role} value={role}>
+                {ROLE_LABELS[role]} — {ROLE_DESCRIPTIONS[role]}
+              </MenuItem>
+            ))}
           </TextField>
           {roleError && (
             <Typography color="error" variant="body2" sx={{ mt: 1 }}>

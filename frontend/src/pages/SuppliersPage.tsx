@@ -16,8 +16,8 @@ import {
   Typography,
 } from '@mui/material';
 import { api } from '../api/axios';
+import { getPermissions } from '../auth/permissions';
 import AppLayout from '../components/AppLayout';
-import { getUser } from '../auth/auth.storage';
 
 type Supplier = {
   id: number;
@@ -45,8 +45,7 @@ export default function SuppliersPage() {
       phone: '',
     });
 
-    const user = getUser();
-    const canEdit = user?.role === 'EDICION';
+    const { canLoad: canEdit, canDelete } = getPermissions();
 
   async function loadSuppliers() {
     const response = await api.get('/suppliers', {
@@ -189,9 +188,11 @@ export default function SuppliersPage() {
                       <Button size="small" variant="outlined" onClick={() => openEditModal(supplier)}>
                         Editar
                       </Button>
-                      <Button size="small" variant="outlined" color="error" onClick={() => handleDeleteSupplier(supplier)}>
-                        Eliminar
-                      </Button>
+                      {canDelete && (
+                        <Button size="small" variant="outlined" color="error" onClick={() => handleDeleteSupplier(supplier)}>
+                          Eliminar
+                        </Button>
+                      )}
                     </Box>
                   )}
                 </TableCell>

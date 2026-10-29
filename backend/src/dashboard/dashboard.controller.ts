@@ -3,13 +3,14 @@ import { DashboardService } from './dashboard.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
+import { LECTURA } from '../auth/roles';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('dashboard')
 export class DashboardController {
   constructor(private readonly dashboardService: DashboardService) {}
 
-  @Roles('EDICION', 'CONSULTA')
+  @Roles(...LECTURA)
   @Get('summary')
   getSummary() {
     return this.dashboardService.getSummary();

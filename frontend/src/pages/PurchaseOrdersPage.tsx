@@ -20,8 +20,8 @@ import {
   DialogActions,
 } from '@mui/material';
 import { api } from '../api/axios';
+import { getPermissions } from '../auth/permissions';
 import AppLayout from '../components/AppLayout';
-import { getUser } from '../auth/auth.storage';
 
 
 type PurchaseOrder = {
@@ -126,8 +126,7 @@ export default function PurchaseOrdersPage() {
   const [receiptDevices, setReceiptDevices] = useState<string[]>([]);
   const [devicesExcelFile, setDevicesExcelFile] = useState<File | null>(null);
 
-  const user = getUser();
-  const canEdit = user?.role === 'EDICION';
+  const { canLoad: canEdit, canDelete } = getPermissions();
   const [selectedItemCategoryId, setSelectedItemCategoryId] = useState('');
 
   const [openDelete, setOpenDelete] = useState(false);
@@ -409,7 +408,7 @@ export default function PurchaseOrdersPage() {
             <TableCell>Fecha</TableCell>
             <TableCell>Estado</TableCell>
             <TableCell>Ampliación de</TableCell> 
-            {canEdit && <TableCell>Acciones</TableCell>}
+            {canDelete && <TableCell>Acciones</TableCell>}
           </TableRow>
         </TableHead>
 
@@ -448,20 +447,22 @@ export default function PurchaseOrdersPage() {
                 ) : '-'}
               </TableCell>
 
-              {canEdit && (
+              {canDelete && (
                 <TableCell>
-                  <Button
-                    size="small"
-                    variant="outlined"
-                    color="error"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSelectedOrder(order);
-                      setOpenDelete(true);
-                    }}
-                  >
-                    Eliminar
-                  </Button>
+                  {canDelete && (
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      color="error"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedOrder(order);
+                        setOpenDelete(true);
+                      }}
+                    >
+                      Eliminar
+                    </Button>
+                  )}
                 </TableCell>
               )}
 
@@ -1030,9 +1031,11 @@ export default function PurchaseOrdersPage() {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setOpenDelete(false)}>Cancelar</Button>
-          <Button variant="contained" color="error" onClick={handleDeleteOrder}>
-            Eliminar
-          </Button>
+          {canDelete && (
+            <Button variant="contained" color="error" onClick={handleDeleteOrder}>
+              Eliminar
+            </Button>
+          )}
         </DialogActions>
       </Dialog>
 

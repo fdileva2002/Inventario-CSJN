@@ -22,6 +22,7 @@ model User {
   createdAssignments    DeviceAssignment[] @relation("AssignmentCreatedBy")
   deviceMovements       DeviceMovement[]
   consumableMovements   ConsumableMovement[]
+  componentMovements    ComponentMovement[]
   auditLogs             AuditLog[]
 }
 
@@ -185,7 +186,9 @@ model Device {
   id                 Int        @id @default(autoincrement())
   tag                String     @unique
   serialNumber       String     @unique
-  hostname           String? 
+  // Normalizada a AA:BB:CC:DD:EE:FF (ver devices/mac-address.ts).
+  macAddress         String?    @unique
+  hostname           String?
   categoryId         Int
   modelId            Int
   statusId           Int
@@ -206,6 +209,8 @@ model Device {
 
   assignments        DeviceAssignment[]
   movements          DeviceMovement[]
+  components         Component[]
+  componentMovements ComponentMovement[]
 
   @@index([statusId])
   @@index([modelId])
@@ -334,6 +339,47 @@ model ConsumableAssignment {
   @@index([departmentId])
 }
 
+// Pieza con seguimiento propio (memoria, disco, fuente...). deviceId es el equipo
+// donde está instalada; null = en depósito.
+model Component {
+  id                 Int        @id @default(autoincrement())
+  type               String
+  brand              String?
+  model              String?
+  serialNumber       String?    @unique
+  capacity           String?
+  status             ComponentStatus @default(DISPONIBLE)
+  deviceId           Int?
+  notes              String?
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+
+  device             Device?    @relation(fields: [deviceId], references: [id])
+  movements          ComponentMovement[]
+
+  @@index([deviceId])
+  @@index([type])
+  @@index([status])
+}
+
+model ComponentMovement {
+  id                 Int        @id @default(autoincrement())
+  componentId        Int
+  type               ComponentMovementType
+  deviceId           Int?
+  detail             String?
+  userId             Int?
+  date               DateTime   @default(now())
+
+  component          Component  @relation(fields: [componentId], references: [id])
+  device             Device?    @relation(fields: [deviceId], references: [id])
+  user               User?      @relation(fields: [userId], references: [id])
+
+  @@index([componentId])
+  @@index([deviceId])
+  @@index([date])
+}
+
 // Lo escriben los triggers de la base (migración audit_triggers), no el código.
 // En UPDATE, previousValues/newValues guardan solo los campos modificados.
 model AuditLog {
@@ -354,9 +400,25 @@ model AuditLog {
   @@index([date])
 }
 
+// Permisos por grupo en src/auth/roles.ts.
 enum UserRole {
-  EDICION
+  SUPERADMIN
+  ADMINISTRADOR
+  TECNICO
   CONSULTA
+}
+
+enum ComponentStatus {
+  DISPONIBLE
+  INSTALADO
+  BAJA
+}
+
+enum ComponentMovementType {
+  ALTA
+  INSTALACION
+  RETIRO
+  BAJA
 }
 
 enum PurchaseOrderStatus {

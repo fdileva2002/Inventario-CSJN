@@ -1,6 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { ConsumableMovementType, Prisma } from '@prisma/client';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { ConsumableMovementType, Prisma, UserRole } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { getCurrentUserRole } from '../common/request-context';
+import { TOTAL } from '../auth/roles';
 import { applyStockMovement } from '../consumables/consumable-stock';
 import { CreateConsumableMovementDto } from './dto/create-consumable-movement.dto';
 
@@ -11,6 +13,11 @@ export class ConsumableMovementsService {
   // El usuario del movimiento lo pone la base desde la sesión; dto.userId se ignora.
   async create(createConsumableMovementDto: CreateConsumableMovementDto) {
     const { consumableId, type, quantity, detail } = createConsumableMovementDto;
+
+    // La ruta admite ASIGNACION (entregar consumibles); ajustar stock es solo para TOTAL.
+    if (type !== 'SALIDA_POR_CONSUMO' && !TOTAL.includes(getCurrentUserRole() as UserRole)) {
+      throw new ForbiddenException('Solo un Superadmin puede ajustar el stock');
+    }
 
     const consumable = await this.prisma.consumable.findUnique({
       where: { id: consumableId },

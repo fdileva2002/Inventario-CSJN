@@ -20,9 +20,9 @@ import {
   Typography,
 } from '@mui/material';
 import { api } from '../api/axios';
+import { getPermissions } from '../auth/permissions';
 import AppLayout from '../components/AppLayout';
 import DeviceHistory from '../components/DeviceHistory';
-import { getUser } from '../auth/auth.storage';
 import * as XLSX from 'xlsx';
 
 type Device = {
@@ -30,6 +30,7 @@ type Device = {
   tag: string;
   serialNumber: string;
   hostname?: string | null;
+  macAddress?: string | null;
   location?: string | null;
   notes?: string | null;
   category?: { name: string };
@@ -70,8 +71,7 @@ type Person = {
 };
 
 export default function DevicesPage() {
-  const user = getUser();
-  const canEdit = user?.role === 'EDICION';
+  const { canLoad: canEdit, canDelete, canAssign } = getPermissions();
   const [devices, setDevices] = useState<Device[]>([]);
 
   const [search, setSearch] = useState('');
@@ -84,6 +84,7 @@ export default function DevicesPage() {
     modelId: '',
     serialNumber: '',
     hostname: '',
+    macAddress: '',
     location: '',
     statusCode: 'DISPONIBLE',
     notes: '',
@@ -109,6 +110,7 @@ export default function DevicesPage() {
 });
   const [dataForm, setDataForm] = useState({
     hostname: '',
+    macAddress: '',
     location: '',
     notes: '',
   });
@@ -175,6 +177,7 @@ export default function DevicesPage() {
         modelId: Number(newDevice.modelId),
         serialNumber: newDevice.serialNumber,
         hostname: newDevice.hostname,
+        macAddress: newDevice.macAddress || undefined,
         location: newDevice.location,
         statusCode: newDevice.statusCode,
         notes: newDevice.notes,
@@ -186,6 +189,7 @@ export default function DevicesPage() {
         modelId: '',
         serialNumber: '',
         hostname: '',
+        macAddress: '',
         location: '',
         statusCode: 'DISPONIBLE',
         notes: '',
@@ -212,6 +216,7 @@ export default function DevicesPage() {
         modelId: '',
         serialNumber: '',
         hostname: '',
+        macAddress: '',
         location: '',
         statusCode: 'DISPONIBLE',
         notes: '',
@@ -225,6 +230,7 @@ export default function DevicesPage() {
     setSelectedDevice(device);
     setDataForm({
       hostname: device.hostname || '',
+      macAddress: device.macAddress || '',
       location: device.location || '',
       notes: device.notes || '',
     });
@@ -272,6 +278,7 @@ export default function DevicesPage() {
     // Solo los campos modificados, para que la auditoría no registre cambios vacíos.
     const changes: Record<string, string> = {};
     if (dataForm.hostname !== (selectedDevice.hostname || '')) changes.hostname = dataForm.hostname;
+    if (dataForm.macAddress !== (selectedDevice.macAddress || '')) changes.macAddress = dataForm.macAddress;
     if (dataForm.location !== (selectedDevice.location || '')) changes.location = dataForm.location;
     if (dataForm.notes !== (selectedDevice.notes || '')) changes.notes = dataForm.notes;
 
@@ -289,6 +296,7 @@ export default function DevicesPage() {
   const dataChanged =
     !!selectedDevice &&
     (dataForm.hostname !== (selectedDevice.hostname || '') ||
+      dataForm.macAddress !== (selectedDevice.macAddress || '') ||
       dataForm.location !== (selectedDevice.location || '') ||
       dataForm.notes !== (selectedDevice.notes || ''));
 
@@ -365,6 +373,7 @@ export default function DevicesPage() {
       Tag: device.tag,
       'Número de serie': device.serialNumber,
       Hostname: device.hostname || '-',
+      MAC: device.macAddress || '-',
       Categoría: device.category?.name || '-',
       Marca: device.model?.brand || '-',
       Modelo: device.model?.model || '-',
@@ -566,27 +575,31 @@ export default function DevicesPage() {
                 
                 <TableCell>
                   <Box sx={{ display: 'flex', gap: 1 }}>
-                    {canEdit && (
+                    {(canAssign || canDelete) && (
                       <>
-                        <Button
-                          size="small"
-                          variant="outlined"
-                          onClick={() => openManageModal(device)}
-                        >
-                          Gestionar
-                        </Button>
-                        <Button
-                          size="small"
-                          variant="outlined"
-                          color="error"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedDevice(device);
-                            setOpenDelete(true);
-                          }}
-                        >
-                          Eliminar
-                        </Button>
+                        {canAssign && (
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            onClick={() => openManageModal(device)}
+                          >
+                            Gestionar
+                          </Button>
+                        )}
+                        {canDelete && (
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            color="error"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedDevice(device);
+                              setOpenDelete(true);
+                            }}
+                          >
+                            Eliminar
+                          </Button>
+                        )}
                       </>
                     )}
                   </Box>
@@ -677,6 +690,17 @@ export default function DevicesPage() {
     />
 
     <TextField
+      label="MAC address (opcional)"
+      fullWidth
+      margin="normal"
+      placeholder="AA:BB:CC:DD:EE:FF"
+      value={newDevice.macAddress}
+      onChange={(e) =>
+        setNewDevice({ ...newDevice, macAddress: e.target.value })
+      }
+    />
+
+    <TextField
       label="Ubicación"
       fullWidth
       margin="normal"
@@ -740,6 +764,8 @@ export default function DevicesPage() {
               Estado actual: {selectedDevice?.status?.name || '-'}
             </Typography>
 
+            {canEdit && (
+            <>
             <Typography variant="subtitle2" sx={{ mt: 1 }}>
               Datos del equipo
             </Typography>
@@ -750,6 +776,15 @@ export default function DevicesPage() {
               margin="dense"
               value={dataForm.hostname}
               onChange={(e) => setDataForm({ ...dataForm, hostname: e.target.value })}
+            />
+
+            <TextField
+              label="MAC address"
+              fullWidth
+              margin="dense"
+              placeholder="AA:BB:CC:DD:EE:FF"
+              value={dataForm.macAddress}
+              onChange={(e) => setDataForm({ ...dataForm, macAddress: e.target.value })}
             />
 
             <TextField
@@ -778,8 +813,10 @@ export default function DevicesPage() {
             >
               Guardar datos
             </Button>
+            </>
+            )}
 
-              {selectedDevice?.status?.code !== 'EN_FUNCIONAMIENTO' && (
+              {canEdit && selectedDevice?.status?.code !== 'EN_FUNCIONAMIENTO' && (
                 <>
                   <TextField
                     select
@@ -947,7 +984,7 @@ export default function DevicesPage() {
               </Button>
             )}
 
-            {selectedDevice?.status?.code !== 'EN_FUNCIONAMIENTO' && (
+            {canEdit && selectedDevice?.status?.code !== 'EN_FUNCIONAMIENTO' && (
               <Button
                 variant="outlined"
                 onClick={handleChangeStatus}
@@ -983,6 +1020,7 @@ export default function DevicesPage() {
               <Typography><strong>Tag:</strong> {detailDevice?.tag}</Typography>
               <Typography><strong>Serial:</strong> {detailDevice?.serialNumber}</Typography>
               <Typography><strong>Hostname:</strong> {detailDevice?.hostname || '-'}</Typography>
+              <Typography><strong>MAC:</strong> {detailDevice?.macAddress || '-'}</Typography>
               <Typography><strong>Ubicación:</strong> {detailDevice?.location || '-'}</Typography>
               <Typography><strong>Categoría:</strong> {detailDevice?.category?.name || '-'}</Typography>
               <Typography>
@@ -1021,9 +1059,11 @@ export default function DevicesPage() {
           </DialogContent>
           <DialogActions>
             <Button onClick={() => setOpenDelete(false)}>Cancelar</Button>
-            <Button variant="contained" color="error" onClick={handleDeleteDevice}>
-              Eliminar
-            </Button>
+            {canDelete && (
+              <Button variant="contained" color="error" onClick={handleDeleteDevice}>
+                Eliminar
+              </Button>
+            )}
           </DialogActions>
         </Dialog>
     </AppLayout>

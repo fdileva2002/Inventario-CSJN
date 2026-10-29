@@ -12,6 +12,7 @@ import { CreateConsumableAssignmentDto } from './dto/create-consumable-assignmen
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
+import { LECTURA, ASIGNACION } from '../auth/roles';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('consumable-assignments')
@@ -20,7 +21,7 @@ export class ConsumableAssignmentsController {
     private readonly consumableAssignmentsService: ConsumableAssignmentsService,
   ) {}
 
-  @Roles('EDICION')
+  @Roles(...ASIGNACION)
   @Post()
   create(@Body() createConsumableAssignmentDto: CreateConsumableAssignmentDto) {
     return this.consumableAssignmentsService.create(
@@ -28,25 +29,25 @@ export class ConsumableAssignmentsController {
     );
   }
 
-  @Roles('EDICION', 'CONSULTA')
+  @Roles(...LECTURA)
   @Get()
   findAll() {
     return this.consumableAssignmentsService.findAll();
   }
 
-  @Roles('EDICION', 'CONSULTA')
+  @Roles(...LECTURA)
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number) {
     return this.consumableAssignmentsService.findOne(id);
   }
 
-  @Roles('EDICION', 'CONSULTA')
+  @Roles(...LECTURA)
   @Get('person/:personId')
   findByPerson(@Param('personId', ParseIntPipe) personId: number) {
     return this.consumableAssignmentsService.findByPerson(personId);
   }
 
-  @Roles('EDICION', 'CONSULTA')
+  @Roles(...LECTURA)
   @Get('consumable/:consumableId')
   findByConsumable(
     @Param('consumableId', ParseIntPipe) consumableId: number,

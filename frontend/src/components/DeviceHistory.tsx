@@ -26,6 +26,35 @@ type DeviceMovement = {
   user?: { name: string } | null;
 };
 
+type InstalledComponent = {
+  id: number;
+  type: string;
+  brand?: string | null;
+  model?: string | null;
+  capacity?: string | null;
+  serialNumber?: string | null;
+};
+
+type ComponentMovement = {
+  id: number;
+  type: 'ALTA' | 'INSTALACION' | 'RETIRO' | 'BAJA';
+  detail?: string | null;
+  date: string;
+  component: InstalledComponent;
+  user?: { name: string } | null;
+};
+
+const componentMovementLabels: Record<ComponentMovement['type'], string> = {
+  ALTA: 'Alta',
+  INSTALACION: 'Instalación',
+  RETIRO: 'Retiro',
+  BAJA: 'Baja',
+};
+
+function describeComponent(component: InstalledComponent) {
+  return [component.type, component.brand, component.model, component.capacity].filter(Boolean).join(' ');
+}
+
 type AuditEntry = {
   id: number;
   action: 'CREACION' | 'MODIFICACION' | 'ELIMINACION';
@@ -58,6 +87,7 @@ const statusLabels: Record<string, string> = {
 const fieldLabels: Record<string, string> = {
   tag: 'Tag',
   serialNumber: 'N° de serie',
+  macAddress: 'MAC',
   hostname: 'Hostname',
   location: 'Ubicación',
   notes: 'Notas',
@@ -104,23 +134,40 @@ export default function DeviceHistory({ deviceId }: { deviceId: number }) {
   const [tab, setTab] = useState(0);
   const [movements, setMovements] = useState<DeviceMovement[]>([]);
   const [changes, setChanges] = useState<AuditEntry[]>([]);
+  const [installed, setInstalled] = useState<InstalledComponent[]>([]);
+  const [componentMovements, setComponentMovements] = useState<ComponentMovement[]>([]);
 
   useEffect(() => {
     setTab(0);
     setMovements([]);
     setChanges([]);
+    setInstalled([]);
+    setComponentMovements([]);
 
     api.get(`/devices/${deviceId}/movements`).then((response) => setMovements(response.data));
     api
       .get('/audit', { params: { entity: 'Device', entityId: deviceId, limit: 200 } })
       .then((response) => setChanges(response.data.data));
+    api
+      .get('/components', { params: { deviceId, limit: 200 } })
+      .then((response) => setInstalled(response.data.data));
+    api
+      .get('/components/movements', { params: { deviceId } })
+      .then((response) => setComponentMovements(response.data));
   }, [deviceId]);
 
   return (
     <Box>
-      <Tabs value={tab} onChange={(_, value) => setTab(value)} sx={{ mb: 1 }}>
+      <Tabs
+        value={tab}
+        onChange={(_, value) => setTab(value)}
+        variant="scrollable"
+        allowScrollButtonsMobile
+        sx={{ mb: 1 }}
+      >
         <Tab label={`Movimientos (${movements.length})`} />
         <Tab label={`Cambios de datos (${changes.length})`} />
+        <Tab label={`Componentes (${installed.length})`} />
       </Tabs>
 
       <Box sx={{ overflowX: 'auto' }}>
@@ -219,6 +266,66 @@ export default function DeviceHistory({ deviceId }: { deviceId: number }) {
               )}
             </TableBody>
           </Table>
+        )}
+
+        {tab === 2 && (
+          <>
+            <Typography variant="subtitle2" sx={{ mb: 1 }}>
+              Instalados hoy
+            </Typography>
+            {installed.length === 0 ? (
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                No tiene componentes registrados
+              </Typography>
+            ) : (
+              <Box component="ul" sx={{ mt: 0, mb: 2, pl: 3 }}>
+                {installed.map((component) => (
+                  <li key={component.id}>
+                    <Typography variant="body2">
+                      {describeComponent(component)}
+                      {component.serialNumber ? ` — S/N ${component.serialNumber}` : ''}
+                    </Typography>
+                  </li>
+                ))}
+              </Box>
+            )}
+
+            <Typography variant="subtitle2" sx={{ mb: 1 }}>
+              Instalaciones y retiros
+            </Typography>
+            <Table size="small" sx={{ minWidth: 640 }}>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Fecha</TableCell>
+                  <TableCell>Movimiento</TableCell>
+                  <TableCell>Componente</TableCell>
+                  <TableCell>Detalle</TableCell>
+                  <TableCell>Usuario</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {componentMovements.map((movement) => (
+                  <TableRow key={movement.id}>
+                    <TableCell sx={{ whiteSpace: 'nowrap' }}>
+                      {new Date(movement.date).toLocaleString()}
+                    </TableCell>
+                    <TableCell>{componentMovementLabels[movement.type]}</TableCell>
+                    <TableCell>{describeComponent(movement.component)}</TableCell>
+                    <TableCell>{movement.detail || '-'}</TableCell>
+                    <TableCell>{movement.user?.name || '-'}</TableCell>
+                  </TableRow>
+                ))}
+
+                {componentMovements.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={5} align="center">
+                      Sin movimientos de componentes
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </>
         )}
       </Box>
     </Box>

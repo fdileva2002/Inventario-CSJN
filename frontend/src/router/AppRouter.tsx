@@ -11,6 +11,7 @@ import UsersPage from '../pages/UsersPage';
 import DepartmentsPage from '../pages/DepartmentsPage';
 import CartuchosPage from '../pages/CartuchosPage';
 import OtrosConsumiblesPage from '../pages/OtrosConsumiblesPage';
+import ComponentsPage from '../pages/ComponentsPage';
 
 export default function AppRouter() {
   return (
@@ -91,6 +92,7 @@ export default function AppRouter() {
           }
         />
 
+        <Route path="/components" element={<ProtectedRoute><ComponentsPage /></ProtectedRoute>} />
         <Route path="/cartuchos" element={<ProtectedRoute><CartuchosPage /></ProtectedRoute>} />
         <Route path="/otros-consumibles" element={<ProtectedRoute><OtrosConsumiblesPage /></ProtectedRoute>} />
 

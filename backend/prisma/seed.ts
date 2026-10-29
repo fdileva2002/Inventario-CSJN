@@ -120,14 +120,14 @@ async function main() {
     update: {
       name: 'Administrador',
       passwordHash,
-      role: UserRole.EDICION,
+      role: UserRole.SUPERADMIN,
       active: true,
     },
     create: {
       name: 'Administrador',
       email: adminEmail,
       passwordHash,
-      role: UserRole.EDICION,
+      role: UserRole.SUPERADMIN,
       active: true,
     },
   });

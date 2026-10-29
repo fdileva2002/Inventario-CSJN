@@ -3,25 +3,26 @@ import { DepartmentsService } from './departments.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
+import { LECTURA, CARGA, TOTAL } from '../auth/roles';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('departments')
 export class DepartmentsController {
   constructor(private readonly departmentsService: DepartmentsService) {}
 
-  @Roles('EDICION', 'CONSULTA')
+  @Roles(...LECTURA)
   @Get()
   findAll() {
     return this.departmentsService.findAll();
   }
 
-  @Roles('EDICION')
+  @Roles(...CARGA)
   @Post()
   create(@Body() body: { name: string }) {
     return this.departmentsService.create(body.name);
   }
 
-  @Roles('EDICION')
+  @Roles(...TOTAL)
   @Delete(':id')
   remove(@Param('id') id: string) {
     return this.departmentsService.remove(+id);

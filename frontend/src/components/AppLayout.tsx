@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import {
   AppBar,
   Box,
@@ -8,7 +8,8 @@ import {
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import Sidebar from './Sidebar';
-import { removeToken } from '../auth/auth.storage';
+import { api } from '../api/axios';
+import { getUser, removeToken, saveUser } from '../auth/auth.storage';
 
 type Props = {
   children: ReactNode;
@@ -16,6 +17,16 @@ type Props = {
 
 export default function AppLayout({ children }: Props) {
   const navigate = useNavigate();
+
+  // El rol guardado al loguearse puede haber cambiado (o ser un rol que ya no existe):
+  // se refresca desde el backend y, si cambió, se recarga para mostrar los permisos vigentes.
+  useEffect(() => {
+    api.get('/auth/me').then((response) => {
+      const stored = getUser();
+      saveUser({ ...stored, ...response.data });
+      if (stored?.role !== response.data.role) window.location.reload();
+    }).catch(() => undefined);
+  }, []);
 
   function handleLogout() {
     removeToken();

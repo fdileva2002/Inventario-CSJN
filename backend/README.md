@@ -130,19 +130,29 @@ Después de correr el seed, el usuario administrador es:
 
 ## Roles de usuario
 
-| Rol | Permisos |
+| Rol | Puede |
 |---|---|
-| `EDICION` | Ver + crear + editar + eliminar |
-| `CONSULTA` | Solo ver, sin botones de acción |
+| `SUPERADMIN` | Todo: también borrar, ajustar stock y administrar usuarios |
+| `ADMINISTRADOR` | Cargar y editar (equipos, consumibles, OC, recepciones, personas, componentes), cambiar estados. No borra ni ajusta stock |
+| `TECNICO` | Asignar y devolver equipos, entregar consumibles, instalar/mover/retirar componentes |
+| `CONSULTA` | Solo ver |
 
-Los roles se gestionan desde la página **Usuarios** (solo visible para usuarios con rol EDICION).
+Los permisos se definen por grupo en `src/auth/roles.ts` (`LECTURA`, `ASIGNACION`, `CARGA`, `TOTAL`) y cada endpoint declara uno. El frontend replica la tabla en `frontend/src/auth/permissions.ts` solo para mostrar u ocultar botones: quien hace cumplir los permisos es el backend.
+
+- El rol y el estado activo se leen de la base en cada request: desactivar a alguien o cambiarle el rol rige al instante, sin esperar a que venza su sesión.
+- No se puede quitar el rol ni desactivar al último Superadmin activo.
+- Cada usuario cambia solo su propia contraseña (con la actual). El Superadmin blanquea las de otros: se genera una temporal aleatoria.
+
+Los roles se gestionan desde la página **Usuarios** (solo visible para Superadmin).
 
 ---
 
 ## Módulos implementados (MVP)
 
 ### Dispositivos
-- Alta manual con generación automática de tag según categoría (ej: `NBK0001`, `MON0003`)
+- Alta manual con generación automática de tag según categoría (ej: `NBK0001`, `MON0003`). El número sigue después de 9999 (`NBK10000`), un prefijo no se mezcla con otro parecido (`PC` / `PCX`) y dos altas simultáneas nunca reciben el mismo tag (`src/devices/device-tag.ts`)
+- MAC address opcional, única, normalizada a `AA:BB:CC:DD:EE:FF` (acepta guiones, puntos o sin separadores). También en la importación de Excel de recepciones (columna `macAddress` o `MAC`)
+- Hostname, MAC, ubicación y notas editables en cualquier estado
 - Gestión de estados: A configurar / Disponible / En funcionamiento / En reparación / En baja
 - Asignación a **persona** o **dependencia**
 - Devolución automática a estado "A configurar"
@@ -152,6 +162,12 @@ Los roles se gestionan desde la página **Usuarios** (solo visible para usuarios
 - Historial de movimientos por dispositivo
 - Exportar búsqueda a Excel
 - Chips de color por estado
+
+### Componentes
+- Piezas con seguimiento propio (memoria, disco, fuente...), con número de serie opcional y único
+- Estados: en depósito / instalado / de baja
+- Instalar en un equipo, mover a otro (queda el retiro del anterior), retirar y dar de baja, con historial y usuario
+- El detalle del dispositivo muestra los componentes instalados y todo lo que se le instaló o retiró
 
 ### Consumibles
 - Stock por cantidad (no por unidad individual)
@@ -195,10 +211,10 @@ Los roles se gestionan desde la página **Usuarios** (solo visible para usuarios
 - ABM completo con búsqueda
 
 ### Usuarios
-- Crear usuarios con rol EDICION o CONSULTA
+- Crear usuarios con cualquiera de los 4 roles
 - Cambiar rol de cualquier usuario
 - Cambiar contraseña propia (validando contraseña actual)
-- Blanquear contraseña de otros usuarios (asigna contraseña temporal)
+- Blanquear contraseña de otros usuarios (asigna una temporal aleatoria)
 - Activar/desactivar usuarios
 
 ### Dashboard
@@ -240,6 +256,12 @@ Para verificar todo esto contra una base de desarrollo (crea datos de prueba), c
 
 ```bash
 node scripts/verificar-historial.mjs admin@inventario.local 'Admin1234!'
+```
+
+Y para roles, usuarios, tags, MAC y componentes (crea además usuarios de prueba):
+
+```bash
+node scripts/verificar-modelo.mjs admin@inventario.local 'Admin1234!'
 ```
 
 ---
@@ -305,19 +327,20 @@ Si necesitás cambiar la URL del backend, modificá `frontend/src/api/axios.ts` 
 CAMBIAR AHORA
 
 -MOSTRAR EL COLOR LA VARIANTE EN LA ORDEN O/C
--NOTA GENERAL DEL DISPOSITIVO, Y SE PUEDA MODIFICAR
--MAC ADDRESS
--AGREGARLE COMPONENTES A DISPOSITIVOS
+-[HECHO] NOTA GENERAL DEL DISPOSITIVO, Y SE PUEDA MODIFICAR
+-[HECHO] MAC ADDRESS
+-[HECHO] AGREGARLE COMPONENTES A DISPOSITIVOS
 -HISTORIA DE MOVIMIENTOS DE PERSONAS (DEPENDENDENCIAS)
 -TIENE AMPLIACIION (OC ORIGINAL)
--cambiar excel para que cargue MAC ADDRESS (opcional)
--CARTEL ERROR AL REPETIR SERIALNUMBER
+-[HECHO] cambiar excel para que cargue MAC ADDRESS (opcional)
+-[HECHO] CARTEL ERROR AL REPETIR SERIALNUMBER
 -AL EXPORTAR TRAER TODOS LOS DETALLES DEL DISPOSITIVO (COMPONENTES, MAC, ETC) (Sin historial)
 -TELEFONO EN PROVEEDOR
 -AGREGAR BOTON CREAR PROVEDOR, MODELO, CARTUCHO EN OC
 -BOTON ASIGNAR EN CONSUMIBLES CON LA OPCION DE TRAER TODOS LOS MODELOS POR BUSQUEDA Y TE DEJE AGREGAR MAS DE UNO POR ASIGNACION
--ROLES: ADMINISTRADOR(PUEDE cargar dispositivos o consumibles, sin borrar y ajustar stock), Tecnico(Solo asignar), consulta
--Carteles de error cuando hay un cuil o SN duplicados
+-[HECHO] ROLES: ADMINISTRADOR(PUEDE cargar dispositivos o consumibles, sin borrar y ajustar stock), Tecnico(Solo asignar), consulta
+-Carteles de error cuando hay un cuil o SN duplicados (SN y MAC hechos; falta revisar CUIL)
+-SITIO RESPONSIVE
 
 
 

@@ -21,8 +21,8 @@ import {
   Typography,
 } from '@mui/material';
 import { api } from '../api/axios';
+import { getPermissions } from '../auth/permissions';
 import AppLayout from '../components/AppLayout';
-import { getUser } from '../auth/auth.storage';
 import * as XLSX from 'xlsx';
 
 type Consumable = {
@@ -89,8 +89,7 @@ export default function CartuchosPage() {
   const [selectedConsumableHistory, setSelectedConsumableHistory] = useState<Consumable | null>(null);
   const [movements, setMovements] = useState<ConsumableMovement[]>([]);
 
-  const user = getUser();
-  const canEdit = user?.role === 'EDICION';
+  const { canLoad: canEdit, canDelete, canAssign, canAdjustStock } = getPermissions();
 
   const [openDelete, setOpenDelete] = useState(false);
   const [total, setTotal] = useState(0);
@@ -321,26 +320,32 @@ export default function CartuchosPage() {
                   <TableCell>{isLowStock ? 'Stock bajo' : 'Stock OK'}</TableCell>
                   <TableCell>
                     <Box sx={{ display: 'flex', gap: 1 }}>
-                      {canEdit && (
+                      {(canAssign || canAdjustStock || canDelete) && (
                         <>
-                          <Button size="small" variant="outlined" onClick={() => openMovementModal(consumable)}>
-                            Ajustar stock
-                          </Button>
-                          <Button size="small" variant="contained" onClick={() => openAssignModal(consumable)}>
-                            Asignar
-                          </Button>
-                          <Button
-                            size="small"
-                            variant="outlined"
-                            color="error"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedConsumable(consumable);
-                              setOpenDelete(true);
-                            }}
-                          >
-                            Eliminar
-                          </Button>
+                          {canAdjustStock && (
+                            <Button size="small" variant="outlined" onClick={() => openMovementModal(consumable)}>
+                              Ajustar stock
+                            </Button>
+                          )}
+                          {canAssign && (
+                            <Button size="small" variant="contained" onClick={() => openAssignModal(consumable)}>
+                              Asignar
+                            </Button>
+                          )}
+                          {canDelete && (
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              color="error"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedConsumable(consumable);
+                                setOpenDelete(true);
+                              }}
+                            >
+                              Eliminar
+                            </Button>
+                          )}
                         </>
                       )}
                     </Box>
@@ -648,9 +653,11 @@ export default function CartuchosPage() {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setOpenDelete(false)}>Cancelar</Button>
-          <Button variant="contained" color="error" onClick={handleDeleteConsumable}>
-            Eliminar
-          </Button>
+          {canDelete && (
+            <Button variant="contained" color="error" onClick={handleDeleteConsumable}>
+              Eliminar
+            </Button>
+          )}
         </DialogActions>
       </Dialog>
     </AppLayout>
