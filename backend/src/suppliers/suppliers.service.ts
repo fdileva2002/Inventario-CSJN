@@ -13,9 +13,9 @@ export class SuppliersService {
 
   async create(createSupplierDto: CreateSupplierDto) {
     try {
-      return await this.prisma.supplier.create({
+      return await this.prisma.transaction((tx) => tx.supplier.create({
         data: createSupplierDto,
-      });
+      }));
     } catch (error: any) {
       if (error.code === 'P2002') {
         throw new BadRequestException('Ya existe un proveedor duplicado');
@@ -81,10 +81,10 @@ export class SuppliersService {
     await this.findOne(id);
 
     try {
-      return await this.prisma.supplier.update({
+      return await this.prisma.transaction((tx) => tx.supplier.update({
         where: { id },
         data: updateSupplierDto,
-      });
+      }));
     } catch (error: any) {
       if (error.code === 'P2002') {
         throw new BadRequestException('Ya existe un proveedor duplicado');
@@ -98,9 +98,9 @@ export class SuppliersService {
     await this.findOne(id);
 
     try {
-      return await this.prisma.supplier.delete({
+      return await this.prisma.transaction((tx) => tx.supplier.delete({
         where: { id },
-      });
+      }));
     } catch (error: any) {
       const message = String(error?.message ?? '');
 

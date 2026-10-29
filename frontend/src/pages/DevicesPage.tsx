@@ -21,6 +21,7 @@ import {
 } from '@mui/material';
 import { api } from '../api/axios';
 import AppLayout from '../components/AppLayout';
+import DeviceHistory from '../components/DeviceHistory';
 import { getUser } from '../auth/auth.storage';
 import * as XLSX from 'xlsx';
 
@@ -30,6 +31,7 @@ type Device = {
   serialNumber: string;
   hostname?: string | null;
   location?: string | null;
+  notes?: string | null;
   category?: { name: string };
   model?: { brand: string; model: string };
   status?: { 
@@ -67,18 +69,6 @@ type Person = {
   employeeId: string;
 };
 
-type DeviceMovement = {
-  id: number;
-  type: string;
-  previousStatus?: string | null;
-  newStatus?: string | null;
-  detail?: string | null;
-  date: string;
-  person?: {
-    fullName: string;
-  } | null;
-};
-
 export default function DevicesPage() {
   const user = getUser();
   const canEdit = user?.role === 'EDICION';
@@ -108,7 +98,6 @@ export default function DevicesPage() {
     )
   : models;
 
-  const [people, setPeople] = useState<Person[]>([]);
   const [selectedDevice, setSelectedDevice] = useState<Device | null>(null);
   const [openManage, setOpenManage] = useState(false);
 
@@ -118,7 +107,11 @@ export default function DevicesPage() {
   notes: '',
   location: '',
 });
-  const [manageHostname, setManageHostname] = useState('');
+  const [dataForm, setDataForm] = useState({
+    hostname: '',
+    location: '',
+    notes: '',
+  });
   const [statusForm, setStatusForm] = useState({
     statusCode: '',
     notes: '',
@@ -126,16 +119,13 @@ export default function DevicesPage() {
   });
   const [openDetail, setOpenDetail] = useState(false);
   const [detailDevice, setDetailDevice] = useState<Device | null>(null);
-  const [movements, setMovements] = useState<DeviceMovement[]>([]);
   const [openDelete, setOpenDelete] = useState(false);
   const [departments, setDepartments] = useState<{id: number, name: string}[]>([]);
   const [assignmentTarget, setAssignmentTarget] = useState<'person' | 'department'>('person');
   const [modelId, setModelId] = useState('');
   const [page, setPage] = useState(0);
   const rowsPerPage = 40;
-  const [assignedSearch, setAssignedSearch] = useState('');
   const [total, setTotal] = useState(0);
-  const [totalPages, setTotalPages] = useState(0);
   const [personSearch, setPersonSearch] = useState('');
   const [filteredPeople, setFilteredPeople] = useState<Person[]>([]);
   const [selectedPerson, setSelectedPerson] = useState<Person | null>(null);
@@ -156,14 +146,12 @@ export default function DevicesPage() {
     const response = await api.get('/devices', { params });
     setDevices(response.data.data);    // ← antes era response.data
     setTotal(response.data.total);
-    setTotalPages(response.data.totalPages);
   }
 
   useEffect(() => {
     loadDevices();
     loadModels();
     loadCategories();
-    loadPeople();
 
     api.get('/departments').then((res) => setDepartments(res.data));
   }, []);
@@ -176,7 +164,6 @@ export default function DevicesPage() {
     setSearch('');
     setStatusCode('');
     setCategoryName('');
-    setAssignedSearch('');
     setLocation('');
     setModelId('');
     setAssignedTo('');
@@ -234,14 +221,13 @@ export default function DevicesPage() {
       setOpenCreate(false);
     }
 
-  async function loadPeople() {
-    const response = await api.get('/people', { params: { limit: 1000 } });
-    setPeople(response.data.data);
-  }
-
   function openManageModal(device: Device) {
     setSelectedDevice(device);
-    setManageHostname(device.hostname || '');
+    setDataForm({
+      hostname: device.hostname || '',
+      location: device.location || '',
+      notes: device.notes || '',
+    });
     setAssignmentForm({
       personId: '',
       departmentId: '',
@@ -278,15 +264,33 @@ export default function DevicesPage() {
     }
   }
 
-  async function handleUpdateHostname() {
-  if (!selectedDevice) return;
+  // Los datos se pueden editar en cualquier estado (por ejemplo, renombrar un
+  // equipo que sigue asignado a la misma persona). El estado no se toca acá.
+  async function handleUpdateData() {
+    if (!selectedDevice) return;
 
-  await api.patch(`/devices/${selectedDevice.id}`, {
-    hostname: manageHostname,
-  });
+    // Solo los campos modificados, para que la auditoría no registre cambios vacíos.
+    const changes: Record<string, string> = {};
+    if (dataForm.hostname !== (selectedDevice.hostname || '')) changes.hostname = dataForm.hostname;
+    if (dataForm.location !== (selectedDevice.location || '')) changes.location = dataForm.location;
+    if (dataForm.notes !== (selectedDevice.notes || '')) changes.notes = dataForm.notes;
 
-  loadDevices();
+    try {
+      const response = await api.patch(`/devices/${selectedDevice.id}`, changes);
+
+      setSelectedDevice({ ...selectedDevice, ...response.data });
+      loadDevices();
+      alert('Datos guardados');
+    } catch (error: any) {
+      alert(error?.response?.data?.message || 'Error al guardar los datos');
+    }
   }
+
+  const dataChanged =
+    !!selectedDevice &&
+    (dataForm.hostname !== (selectedDevice.hostname || '') ||
+      dataForm.location !== (selectedDevice.location || '') ||
+      dataForm.notes !== (selectedDevice.notes || ''));
 
   async function handleReturnDevice() {
     if (!selectedDevice) return;
@@ -339,13 +343,10 @@ export default function DevicesPage() {
     { code: 'EN_BAJA', label: 'En baja' },
   ].filter((status) => status.code !== selectedDevice?.status?.code);
 
-  async function openDetailModal(device: Device) {
-  setDetailDevice(device);
-  setOpenDetail(true);
-
-  const response = await api.get(`/devices/${device.id}/movements`);
-  setMovements(response.data);
-}
+  function openDetailModal(device: Device) {
+    setDetailDevice(device);
+    setOpenDetail(true);
+  }
 
   async function handleDeleteDevice() {
     if (!selectedDevice) return;
@@ -739,6 +740,45 @@ export default function DevicesPage() {
               Estado actual: {selectedDevice?.status?.name || '-'}
             </Typography>
 
+            <Typography variant="subtitle2" sx={{ mt: 1 }}>
+              Datos del equipo
+            </Typography>
+
+            <TextField
+              label="Hostname"
+              fullWidth
+              margin="dense"
+              value={dataForm.hostname}
+              onChange={(e) => setDataForm({ ...dataForm, hostname: e.target.value })}
+            />
+
+            <TextField
+              label="Ubicación"
+              fullWidth
+              margin="dense"
+              value={dataForm.location}
+              onChange={(e) => setDataForm({ ...dataForm, location: e.target.value })}
+            />
+
+            <TextField
+              label="Notas"
+              fullWidth
+              margin="dense"
+              multiline
+              minRows={2}
+              value={dataForm.notes}
+              onChange={(e) => setDataForm({ ...dataForm, notes: e.target.value })}
+            />
+
+            <Button
+              variant="outlined"
+              onClick={handleUpdateData}
+              disabled={!dataChanged}
+              sx={{ mt: 1, mb: 2 }}
+            >
+              Guardar datos
+            </Button>
+
               {selectedDevice?.status?.code !== 'EN_FUNCIONAMIENTO' && (
                 <>
                   <TextField
@@ -775,23 +815,6 @@ export default function DevicesPage() {
               
             {selectedDevice?.status?.name === 'Disponible' && (
               <>
-                <TextField
-                  label="Hostname"
-                  fullWidth
-                  margin="normal"
-                  value={manageHostname}
-                  onChange={(e) => setManageHostname(e.target.value)}
-                />
-
-                <Button
-                  variant="outlined"
-                  onClick={handleUpdateHostname}
-                  sx={{ mb: 2 }}
-                >
-                  Guardar hostname
-                </Button>
-
-
                 <TextField
                   select
                   label="Asignar a"
@@ -978,42 +1001,8 @@ export default function DevicesPage() {
             <Typography variant="h6" sx={{ mb: 1 }}>
               Historial
             </Typography>
-                
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell>Fecha</TableCell>
-                  <TableCell>Tipo</TableCell>
-                  <TableCell>Estado anterior</TableCell>
-                  <TableCell>Estado nuevo</TableCell>
-                  <TableCell>Persona</TableCell>
-                  <TableCell>Detalle</TableCell>
-                </TableRow>
-              </TableHead>
-                
-              <TableBody>
-                {movements.map((movement) => (
-                  <TableRow key={movement.id}>
-                    <TableCell>
-                      {new Date(movement.date).toLocaleString()}
-                    </TableCell>
-                    <TableCell>{movement.type}</TableCell>
-                    <TableCell>{movement.previousStatus || '-'}</TableCell>
-                    <TableCell>{movement.newStatus || '-'}</TableCell>
-                    <TableCell>{movement.person?.fullName || '-'}</TableCell>
-                    <TableCell>{movement.detail || '-'}</TableCell>
-                  </TableRow>
-                ))}
-        
-                {movements.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={6} align="center">
-                      Sin movimientos
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
+
+            {detailDevice && <DeviceHistory deviceId={detailDevice.id} />}
           </DialogContent>
               
           <DialogActions>

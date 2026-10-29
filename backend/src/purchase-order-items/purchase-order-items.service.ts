@@ -14,7 +14,7 @@ export class PurchaseOrderItemsService {
   async create(createPurchaseOrderItemDto: CreatePurchaseOrderItemDto) {
     await this.validateReferences(createPurchaseOrderItemDto);
 
-    return this.prisma.purchaseOrderItem.create({
+    return this.prisma.transaction((tx) => tx.purchaseOrderItem.create({
       data: {
         purchaseOrderId: createPurchaseOrderItemDto.purchaseOrderId,
         itemType: createPurchaseOrderItemDto.itemType,
@@ -31,7 +31,7 @@ export class PurchaseOrderItemsService {
         notes: createPurchaseOrderItemDto.notes?.trim(),
       },
       include: this.getInclude(),
-    });
+    }));
   }
 
   async findAll(purchaseOrderId?: number) {
@@ -95,7 +95,7 @@ export class PurchaseOrderItemsService {
 
     await this.validateReferences(mergedData);
 
-    return this.prisma.purchaseOrderItem.update({
+    return this.prisma.transaction((tx) => tx.purchaseOrderItem.update({
       where: { id },
       data: {
         purchaseOrderId: mergedData.purchaseOrderId,
@@ -109,16 +109,16 @@ export class PurchaseOrderItemsService {
         notes: mergedData.notes?.trim(),
       },
       include: this.getInclude(),
-    });
+    }));
   }
 
   async remove(id: number) {
     await this.findOne(id);
 
     try {
-      return await this.prisma.purchaseOrderItem.delete({
+      return await this.prisma.transaction((tx) => tx.purchaseOrderItem.delete({
         where: { id },
-      });
+      }));
     } catch (error: any) {
       const message = String(error?.message ?? '');
 

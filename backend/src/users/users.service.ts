@@ -24,7 +24,7 @@ export class UsersService {
 
     const passwordHash = await bcrypt.hash(createUserDto.password, 10);
 
-    const user = await this.prisma.user.create({
+    const user = await this.prisma.transaction((tx) => tx.user.create({
       data: {
         name: createUserDto.name.trim(),
         email: createUserDto.email.trim().toLowerCase(),
@@ -32,7 +32,7 @@ export class UsersService {
         role: createUserDto.role,
         active: true,
       },
-    });
+    }));
 
     return this.sanitizeUser(user);
   }
@@ -73,7 +73,7 @@ export class UsersService {
       }
     }
 
-    const updatedUser = await this.prisma.user.update({
+    const updatedUser = await this.prisma.transaction((tx) => tx.user.update({
       where: { id },
       data: {
         name:
@@ -87,7 +87,7 @@ export class UsersService {
         role: updateUserDto.role,
         active: updateUserDto.active,
       },
-    });
+    }));
 
     return this.sanitizeUser(updatedUser);
   }
@@ -108,10 +108,10 @@ export class UsersService {
 
     const passwordHash = await bcrypt.hash(updateUserPasswordDto.password, 10);
 
-    const updatedUser = await this.prisma.user.update({
+    const updatedUser = await this.prisma.transaction((tx) => tx.user.update({
       where: { id },
       data: { passwordHash },
-    });
+    }));
 
     return {
       message: 'Contraseña actualizada correctamente',
@@ -142,10 +142,10 @@ export class UsersService {
     const defaultPassword = 'Cdl%4884';
     const passwordHash = await bcrypt.hash(defaultPassword, 10);
     
-    await this.prisma.user.update({
+    await this.prisma.transaction((tx) => tx.user.update({
       where: { id },
       data: { passwordHash },
-    });
+    }));
   
     return {
       message: `Contraseña reseteada. Nueva contraseña temporal: ${defaultPassword}`,

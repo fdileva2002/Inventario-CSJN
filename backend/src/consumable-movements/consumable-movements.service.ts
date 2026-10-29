@@ -1,89 +1,37 @@
-import {
-  BadRequestException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
-import {
-  ConsumableMovementType,
-  Prisma,
-} from '@prisma/client';
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { ConsumableMovementType, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { applyStockMovement } from '../consumables/consumable-stock';
 import { CreateConsumableMovementDto } from './dto/create-consumable-movement.dto';
 
 @Injectable()
 export class ConsumableMovementsService {
   constructor(private readonly prisma: PrismaService) {}
 
+  // El usuario del movimiento lo pone la base desde la sesión; dto.userId se ignora.
   async create(createConsumableMovementDto: CreateConsumableMovementDto) {
-    const { consumableId, type, quantity, detail, userId } =
-      createConsumableMovementDto;
+    const { consumableId, type, quantity, detail } = createConsumableMovementDto;
 
     const consumable = await this.prisma.consumable.findUnique({
       where: { id: consumableId },
-      include: {
-        stock: true,
-      },
     });
 
     if (!consumable) {
       throw new NotFoundException('El consumible indicado no existe');
     }
 
-    if (userId !== undefined) {
-      const user = await this.prisma.user.findUnique({
-        where: { id: userId },
-      });
+    const delta = type === 'AJUSTE_POSITIVO' ? quantity : -quantity;
 
-      if (!user) {
-        throw new NotFoundException('El usuario indicado no existe');
-      }
-    }
+    const movement = await this.prisma.transaction((tx) =>
+      applyStockMovement(tx, {
+        consumableId,
+        type: type as ConsumableMovementType,
+        delta,
+        detail: detail?.trim(),
+      }),
+    );
 
-    const currentStock = consumable.stock?.currentStock ?? 0;
-
-    let newStock = currentStock;
-
-    if (type === 'SALIDA_POR_CONSUMO' || type === 'AJUSTE_NEGATIVO') {
-      newStock = currentStock - quantity;
-
-      if (newStock < 0) {
-        throw new BadRequestException(
-          `Stock insuficiente. Stock actual: ${currentStock}, intentando descontar: ${quantity}`,
-        );
-      }
-    }
-
-    if (type === 'AJUSTE_POSITIVO') {
-      newStock = currentStock + quantity;
-    }
-
-    return this.prisma.$transaction(async (tx) => {
-      await tx.consumableStock.upsert({
-        where: { consumableId },
-        update: {
-          currentStock: newStock,
-        },
-        create: {
-          consumableId,
-          currentStock: newStock,
-        },
-      });
-
-      const movement = await tx.consumableMovement.create({
-        data: {
-          consumableId,
-          type: type as ConsumableMovementType,
-          quantity,
-          previousStock: currentStock,
-          newStock,
-          detail: detail?.trim(),
-          userId,
-        },
-        include: this.getInclude(),
-      });
-
-      return movement;
-    });
+    return this.findOne(movement.id);
   }
 
   async findAll(consumableId?: number) {
@@ -128,7 +76,7 @@ export class ConsumableMovementsService {
       },
       purchaseOrder: true,
       receipt: true,
-      user: true,
+      user: { select: { id: true, name: true, email: true } },
     } satisfies Prisma.ConsumableMovementInclude;
   }
 }

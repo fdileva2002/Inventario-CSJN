@@ -9,30 +9,37 @@ import {
   ConsumableMovementType,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { getCurrentUserId } from '../common/request-context';
+import { applyStockMovement } from '../consumables/consumable-stock';
 import { CreateReceiptDto } from './dto/create-receipt.dto';
 import { UpdateReceiptDto } from './dto/update-receipt.dto';
 import { CreateDevicesFromReceiptDto } from './dto/create-devices-from-receipt.dto';
 import * as XLSX from 'xlsx';
+
+type ReceiptItemInput = {
+  purchaseOrderItemId: number;
+  receivedQuantity: number;
+};
 
 @Injectable()
 export class ReceiptsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(createReceiptDto: CreateReceiptDto) {
-    await this.validateReceiptData({
-      purchaseOrderId: createReceiptDto.purchaseOrderId,
-      receivedById: createReceiptDto.receivedById,
-      items: createReceiptDto.items,
-    });
+    const result = await this.prisma.transaction(async (tx) => {
+      await this.validateReceiptData(tx, {
+        purchaseOrderId: createReceiptDto.purchaseOrderId,
+        receivedById: createReceiptDto.receivedById,
+        items: createReceiptDto.items,
+      });
 
-    const result = await this.prisma.$transaction(async (tx) => {
       const receipt = await tx.receipt.create({
         data: {
           purchaseOrderId: createReceiptDto.purchaseOrderId,
           receiptNumber: createReceiptDto.receiptNumber?.trim(),
           receivedAt: new Date(createReceiptDto.receivedAt),
           notes: createReceiptDto.notes?.trim(),
-          receivedById: createReceiptDto.receivedById,
+          receivedById: createReceiptDto.receivedById ?? getCurrentUserId(),
           items: {
             create: createReceiptDto.items.map((item) => ({
               purchaseOrderItemId: item.purchaseOrderItemId,
@@ -40,7 +47,6 @@ export class ReceiptsService {
             })),
           },
         },
-        include: this.getInclude(),
       });
 
       await this.updatePurchaseOrderStatus(
@@ -48,7 +54,18 @@ export class ReceiptsService {
         createReceiptDto.purchaseOrderId,
       );
 
-      await this.rebuildConsumableStockAndMovements(tx);
+      const received = await this.consumableQuantities(tx, createReceiptDto.items);
+
+      for (const [consumableId, quantity] of received) {
+        await applyStockMovement(tx, {
+          consumableId,
+          type: ConsumableMovementType.INGRESO_POR_COMPRA,
+          delta: quantity,
+          detail: `Ingreso por compra - recepción ${receipt.receiptNumber ?? receipt.id}`,
+          purchaseOrderId: receipt.purchaseOrderId,
+          receiptId: receipt.id,
+        });
+      }
 
       return receipt;
     });
@@ -140,14 +157,14 @@ export class ReceiptsService {
         receivedQuantity: item.receivedQuantity,
       }));
 
-    await this.validateReceiptData({
-      purchaseOrderId: mergedPurchaseOrderId,
-      receivedById: mergedReceivedById,
-      items: mergedItems,
-      currentReceiptId: id,
-    });
+    await this.prisma.transaction(async (tx) => {
+      await this.validateReceiptData(tx, {
+        purchaseOrderId: mergedPurchaseOrderId,
+        receivedById: mergedReceivedById,
+        items: mergedItems,
+        currentReceiptId: id,
+      });
 
-    await this.prisma.$transaction(async (tx) => {
       await tx.receipt.update({
         where: { id },
         data: {
@@ -193,7 +210,31 @@ export class ReceiptsService {
         await this.updatePurchaseOrderStatus(tx, purchaseOrderId);
       }
 
-      await this.rebuildConsumableStockAndMovements(tx);
+      // Si cambiaron las cantidades de consumibles, el stock se corrige con un
+      // ajuste por la diferencia: el ingreso original queda en el historial.
+      if (updateReceiptDto.items) {
+        const before = await this.consumableQuantities(tx, existingReceipt.items);
+        const after = await this.consumableQuantities(tx, updateReceiptDto.items);
+        const consumableIds = new Set([...before.keys(), ...after.keys()]);
+        const label = updateReceiptDto.receiptNumber?.trim() || existingReceipt.receiptNumber || id;
+
+        for (const consumableId of consumableIds) {
+          const delta = (after.get(consumableId) ?? 0) - (before.get(consumableId) ?? 0);
+
+          if (delta === 0) continue;
+
+          await applyStockMovement(tx, {
+            consumableId,
+            type: delta > 0
+              ? ConsumableMovementType.AJUSTE_POSITIVO
+              : ConsumableMovementType.AJUSTE_NEGATIVO,
+            delta,
+            detail: `Corrección de recepción ${label}`,
+            purchaseOrderId: mergedPurchaseOrderId,
+            receiptId: id,
+          });
+        }
+      }
     });
 
     return this.findOne(id);
@@ -206,7 +247,7 @@ export class ReceiptsService {
           supplier: true,
         },
       },
-      receivedBy: true,
+      receivedBy: { select: { id: true, name: true, email: true } },
       items: {
         include: {
           purchaseOrderItem: {
@@ -224,18 +265,44 @@ export class ReceiptsService {
     } satisfies Prisma.ReceiptInclude;
   }
 
-  private async validateReceiptData(params: {
-    purchaseOrderId: number;
-    receivedById?: number;
-    items: Array<{
-      purchaseOrderItemId: number;
-      receivedQuantity: number;
-    }>;
-    currentReceiptId?: number;
-  }) {
+  // Cantidad recibida por consumible (ignora ítems de dispositivos).
+  private async consumableQuantities(
+    tx: Prisma.TransactionClient,
+    items: ReceiptItemInput[],
+  ) {
+    const orderItems = await tx.purchaseOrderItem.findMany({
+      where: { id: { in: items.map((item) => item.purchaseOrderItemId) } },
+      select: { id: true, itemType: true, consumableId: true },
+    });
+    const byId = new Map(orderItems.map((orderItem) => [orderItem.id, orderItem]));
+    const quantities = new Map<number, number>();
+
+    for (const item of items) {
+      const orderItem = byId.get(item.purchaseOrderItemId);
+
+      if (orderItem?.itemType !== 'CONSUMABLE' || !orderItem.consumableId) continue;
+
+      quantities.set(
+        orderItem.consumableId,
+        (quantities.get(orderItem.consumableId) ?? 0) + item.receivedQuantity,
+      );
+    }
+
+    return quantities;
+  }
+
+  private async validateReceiptData(
+    db: Prisma.TransactionClient,
+    params: {
+      purchaseOrderId: number;
+      receivedById?: number;
+      items: ReceiptItemInput[];
+      currentReceiptId?: number;
+    },
+  ) {
     const { purchaseOrderId, receivedById, items, currentReceiptId } = params;
 
-    const purchaseOrder = await this.prisma.purchaseOrder.findUnique({
+    const purchaseOrder = await db.purchaseOrder.findUnique({
       where: { id: purchaseOrderId },
     });
 
@@ -250,7 +317,7 @@ export class ReceiptsService {
     }
 
     if (receivedById !== undefined) {
-      const user = await this.prisma.user.findUnique({
+      const user = await db.user.findUnique({
         where: { id: receivedById },
       });
 
@@ -270,7 +337,7 @@ export class ReceiptsService {
 
       uniqueItemIds.add(item.purchaseOrderItemId);
 
-      const purchaseOrderItem = await this.prisma.purchaseOrderItem.findUnique({
+      const purchaseOrderItem = await db.purchaseOrderItem.findUnique({
         where: { id: item.purchaseOrderItemId },
       });
 
@@ -286,7 +353,7 @@ export class ReceiptsService {
         );
       }
 
-      const previousReceipts = await this.prisma.receiptItem.aggregate({
+      const previousReceipts = await db.receiptItem.aggregate({
         where: {
           purchaseOrderItemId: item.purchaseOrderItemId,
           ...(currentReceiptId
@@ -374,109 +441,6 @@ export class ReceiptsService {
     });
   }
 
-  private async rebuildConsumableStockAndMovements(
-    tx: Prisma.TransactionClient,
-  ) {
-    const receiptConsumableItems = await tx.receiptItem.findMany({
-      where: {
-        purchaseOrderItem: {
-          itemType: 'CONSUMABLE',
-          consumableId: {
-            not: null,
-          },
-        },
-      },
-      include: {
-        receipt: true,
-        purchaseOrderItem: {
-          include: {
-            consumable: true,
-          },
-        },
-      },
-      orderBy: [
-        { receipt: { receivedAt: 'asc' } },
-        { receiptId: 'asc' },
-        { id: 'asc' },
-      ],
-    });
-
-    await tx.consumableMovement.deleteMany({
-      where: {
-        type: ConsumableMovementType.INGRESO_POR_COMPRA,
-        receiptId: {
-          not: null,
-        },
-      },
-    });
-
-    const allConsumables = await tx.consumable.findMany({
-      select: { id: true },
-      orderBy: { id: 'asc' },
-    });
-
-    for (const consumable of allConsumables) {
-      await tx.consumableStock.upsert({
-        where: { consumableId: consumable.id },
-        update: {
-          currentStock: 0,
-        },
-        create: {
-          consumableId: consumable.id,
-          currentStock: 0,
-        },
-      });
-    }
-
-    const stockMap = new Map<number, number>();
-
-    for (const consumable of allConsumables) {
-      stockMap.set(consumable.id, 0);
-    }
-
-    for (const item of receiptConsumableItems) {
-      const consumableId = item.purchaseOrderItem.consumableId;
-
-      if (!consumableId) {
-        continue;
-      }
-
-      const previousStock = stockMap.get(consumableId) ?? 0;
-      const newStock = previousStock + item.receivedQuantity;
-
-      await tx.consumableStock.upsert({
-        where: { consumableId },
-        update: {
-          currentStock: newStock,
-        },
-        create: {
-          consumableId,
-          currentStock: newStock,
-        },
-      });
-
-      await tx.consumableMovement.create({
-        data: {
-          consumableId,
-          purchaseOrderId: item.receipt.purchaseOrderId,
-          receiptId: item.receiptId,
-          type: ConsumableMovementType.INGRESO_POR_COMPRA,
-          quantity: item.receivedQuantity,
-          previousStock,
-          newStock,
-          detail:
-            item.receipt.receiptNumber
-              ? `Ingreso por compra - recepción ${item.receipt.receiptNumber}`
-              : `Ingreso por compra - recepción ${item.receiptId}`,
-          userId: item.receipt.receivedById ?? undefined,
-          date: item.receipt.receivedAt,
-        },
-      });
-
-      stockMap.set(consumableId, newStock);
-    }
-  }
-
   async createDevicesFromReceipt(
   receiptId: number,
   createDevicesFromReceiptDto: CreateDevicesFromReceiptDto,
@@ -528,17 +492,10 @@ export class ReceiptsService {
   }
 
   
-  const existingDevices = await this.prisma.device.findFirst({
+  const existingDevices = await this.prisma.deviceMovement.findFirst({
     where: {
-      purchaseOrderId: receipt.purchaseOrderId,
-      movements: {
-        some: {
-          type: 'INGRESO_POR_COMPRA',
-          detail: {
-            contains: `recepción ${receiptId}`,
-          },
-        },
-      },
+      type: 'INGRESO_POR_COMPRA',
+      receiptId,
     },
   });
 
@@ -570,7 +527,7 @@ export class ReceiptsService {
     );
   }
 
-  return this.prisma.$transaction(async (tx) => {
+  return this.prisma.transaction(async (tx) => {
     const createdDevices: any[] = [];
     let serialIndex = 0;
 
@@ -619,6 +576,7 @@ export class ReceiptsService {
             newStatus: statusToConfigure.code,
             detail: `Ingreso por OC ${receipt.purchaseOrder.number}${receipt.receiptNumber ? ` - Recepción ${receipt.receiptNumber}` : ''}`,
             receiptId: receipt.id,
+            newLocation: device.location,
           },
         });
 

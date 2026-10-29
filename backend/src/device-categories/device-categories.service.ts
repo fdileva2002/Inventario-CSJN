@@ -13,9 +13,9 @@ export class DeviceCategoriesService {
 
   async create(createDeviceCategoryDto: CreateDeviceCategoryDto) {
     try {
-      return await this.prisma.deviceCategory.create({
+      return await this.prisma.transaction((tx) => tx.deviceCategory.create({
         data: createDeviceCategoryDto,
-      });
+      }));
     } catch (error: any) {
       if (error.code === 'P2002') {
         throw new BadRequestException('Ya existe una categoría con ese nombre');
@@ -51,10 +51,10 @@ export class DeviceCategoriesService {
     await this.findOne(id);
 
     try {
-      return await this.prisma.deviceCategory.update({
+      return await this.prisma.transaction((tx) => tx.deviceCategory.update({
         where: { id },
         data: updateDeviceCategoryDto,
-      });
+      }));
     } catch (error: any) {
       if (error.code === 'P2002') {
         throw new BadRequestException('Ya existe una categoría con ese nombre');
@@ -68,9 +68,9 @@ export class DeviceCategoriesService {
   await this.findOne(id);
 
   try {
-    return await this.prisma.deviceCategory.delete({
+    return await this.prisma.transaction((tx) => tx.deviceCategory.delete({
       where: { id },
-    });
+    }));
   } catch (error: any) {
     const message = String(error?.message ?? '');
 

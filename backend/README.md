@@ -221,6 +221,26 @@ Los roles se gestionan desde la página **Usuarios** (solo visible para usuarios
 - Los tags se generan automáticamente usando el código de la categoría (ej: `MON` → `MON0001`)
 - No se puede eliminar una categoría que tenga modelos o dispositivos asociados
 - No se puede eliminar una dependencia que tenga personas asociadas
+- Una dependencia con historial (asignaciones o movimientos) se da de baja lógica en lugar de borrarse
+- El estado de un dispositivo no se cambia desde "Editar": solo asignando, devolviendo o con "Cambiar estado"
+
+---
+
+## Historial y auditoría
+
+El historial se garantiza en la base de datos (migración `historial_confiable`), no solo en el código:
+
+- **Movimientos** (`DeviceMovement`, `ConsumableMovement`): el historial operativo (asignaciones, devoluciones, cambios de estado, traslados, ingresos y consumos). Cada uno registra el usuario que lo hizo.
+- **Auditoría** (`AuditLog`): un trigger registra toda alta, modificación o baja en las tablas principales, con los valores de antes y después de cada campo modificado y el usuario. Captura también cambios hechos a mano por SQL. Se consulta con `GET /audit?entity=Device&entityId=1`.
+- **Solo agregado**: movimientos y auditoría no se pueden modificar ni borrar (lo impide un trigger). Un error se corrige con un movimiento nuevo, por ejemplo un ajuste de stock.
+- **Usuario**: toda escritura del backend pasa por `prisma.transaction(...)`, que informa a la base el usuario logueado (`app.user_id`). Las escrituras nuevas tienen que usar ese método y no `this.prisma.<modelo>.create/update/delete` directo, o la auditoría queda sin usuario.
+- **Stock**: se modifica únicamente con `applyStockMovement` (`src/consumables/consumable-stock.ts`), que bloquea la fila para que dos operaciones simultáneas no se pisen. La base rechaza stock negativo.
+
+Para verificar todo esto contra una base de desarrollo (crea datos de prueba), con el backend levantado:
+
+```bash
+node scripts/verificar-historial.mjs admin@inventario.local 'Admin1234!'
+```
 
 ---
 
